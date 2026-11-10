@@ -3,8 +3,7 @@
 React 18 + Tailwind v4 + Vite. Bundled imports — **no `.js` suffixes here** (unlike the
 Node packages). `npm run build` at the repo root builds this via Vite.
 
-ONE viewer (the legacy v0.1 `engine.ts`/`SceneViewer.tsx` were removed in the
-final-system sprint — do not resurrect them):
+Use the shared Knowledge City viewer for live and exported scenes:
 
 - `viewer/space-engine.ts` + `SpaceViewer.tsx` — the Knowledge City. All 3D work happens
   here. `SpaceViewer` also powers the static export: pass

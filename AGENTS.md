@@ -9,7 +9,7 @@ learning loop (tour, checkpoints/exam, guide Q&A, drawer menu with open-in-edito
 inside the scene. Exportable as a static bundle. No cloud, no telemetry, no tiers.
 
 Read the nearest `AGENTS.md` before editing `packages/scene-schema`, `packages/server`
-or `packages/ui`. Follow the matching guide if you are working in a maintainer checkout.
+or `packages/ui`. Follow the matching area guide.
 Chat instructions from the user override this guide.
 
 ## Source of truth (read before coding)
@@ -67,9 +67,9 @@ Chat instructions from the user override this guide.
 4. **No tier language, no "coming soon".** Three model layers (bundled pack → optional
    personal Tripo overlay, five offer classes only → procedural fallback) are all
    first-class; the keyless install must look excellent.
-5. **One space, no scene types (D1).** Never add pre-generation modes; capabilities go
+5. **One space, no scene types.** Never add pre-generation modes; capabilities go
    INSIDE the scene. `scene_type` in the DB is a legacy column.
-6. **Coherence law (D9).** Every placed element answers a walker's question (what is this /
+6. **Coherence law.** Every placed element answers a walker's question (what is this /
    how does it work / what's the flow / what matters in this doc / did I understand).
    Nothing decorative, nothing disconnected.
 7. **TypeScript strict everywhere.** `scene-schema`/`server`/`cli` are NodeNext ESM —
@@ -94,8 +94,7 @@ Chat instructions from the user override this guide.
   re-builds), `tripo.ts` (personal overlay, receipt law), `routes.ts`, `export.ts` (static
   city bundle). SQLite via `node:sqlite`.
 - `packages/ui` — React + Tailwind + Vite: `viewer/space-engine.ts` + `SpaceViewer.tsx`
-  (the ONLY viewer — legacy v0.1 was removed in the final-system sprint), `screens/*`,
-  `export-main.tsx` (offline city-bundle entry).
+  (the shared viewer), `screens/*`, `export-main.tsx` (offline city-bundle entry).
 - `packages/cli` — the `kodyurd` bin.
 - `packages/assets` — the bundled model pack (GENERATED — see Danger zones).
 - `examples/harbor-desk` — the example workspace and standalone reservation service.
@@ -112,9 +111,6 @@ Chat instructions from the user override this guide.
 
 ## Danger zones
 
-- **Maintainer-only model tooling** can make paid API calls. If present in your checkout,
-  leave `scripts/asset-pack/build.mjs` and `scripts/asset-pack/animate.mjs` to the
-  maintainer. Keep every receipt in `scripts/asset-pack/receipts/` intact.
 - **`packages/assets/models/` and `packages/assets/manifest.json`** — generated artifacts.
   Never hand-edit; they are produced only by the pack scripts.
 - **`packages/scene-schema`** — changes affect prompts, pipeline validation,

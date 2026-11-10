@@ -8,9 +8,8 @@ The schema is the **security boundary**: runtime agents output only this JSON, a
 > (no `sceneType`), plus `interiors`, richer `diagrams` (graph/sequence/state/matrix/ERD,
 > icon roles from the asset registry) and bounded `presentation` tokens (accents,
 > panel variants, camera shots). See the [architecture overview](../ARCHITECTURE.md).
-> Nothing generates v0.1 anymore — the legacy viewer and its job were removed in
-> the final-system sprint. v0.1 stays in the package ONLY as upgrade input:
-> `parseSpace` upgrades old v0.1 documents via `upgradeSceneToSpace`.
+> Generation writes v0.2. `parseSpace` accepts v0.1 documents through
+> `upgradeSceneToSpace`.
 
 ## Scenario replay and source ranges
 
@@ -75,11 +74,11 @@ The schema is the **security boundary**: runtime agents output only this JSON, a
 - `checkpoint`: `question`, 2–4 `options`, **exactly one** `correct: true`
   (zod `.refine` enforces it), `explanation?`.
 
-## Change checklist — touch all six or you ship drift
+## Change checklist
 
-1. `packages/scene-schema/src/index.ts` — the zod schema (+ `SCENE_CONTRACT_NOTE`).
+1. `packages/scene-schema/src/space.ts` — the v0.2 Zod schema and `SPACE_CONTRACT_NOTE`.
 2. `packages/server/prompts/*.md` + `packages/server/src/space-pipeline.ts` — the
-   contract text the agents read (playbook / city-plan / building-pass), the prompt
+   contract text the agents read, the prompt
    builders and the `normalizeCityPlan`/`normalizeBuildingPass` pre-validation.
    The contract must describe reality, not aspiration.
 3. `packages/ui/src/space-types.ts` — the mirrored TS types.

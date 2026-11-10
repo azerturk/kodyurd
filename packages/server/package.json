@@ -7,8 +7,7 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "prompts",
-    "scene-references"
+    "prompts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json"

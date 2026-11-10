@@ -9,7 +9,7 @@ Kodyurd binds its web server to `127.0.0.1`. Workspace configuration, scans, job
 | Generate a personal model | Tripo receives the user's API key and the chosen model prompt. Its signed download URL supplies the result. |
 | Run `npm ci` | npm downloads the dependencies pinned in the lockfile. |
 
-The public release provides visual guidance through text. A maintainer installation with optional reference images may include one in supported generation calls.
+Generation uses text for visual guidance by default. If you install optional reference images locally, supported generation calls may send an image to the selected provider.
 
 The default CLI generation and Guide run with a restricted, separate working directory and the prepared evidence packet. The optional `KODYURD_WORKSPACE_DISCOVERY=1` setting allows CLI agents to discover more files in the workspace in read-only mode. Turn it on only for folders you intend to share with the provider. Provider authentication, processing and billing follow your own provider account.
 

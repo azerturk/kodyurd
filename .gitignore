@@ -6,24 +6,12 @@ coverage/
 .cache/
 *.tsbuildinfo
 
-# Local workspaces, private archives and release staging
+# Local workspaces and runtime data
 .kodyurd/
-.kodyurd-data/
-.kodyurd-dogfood/
-.kodyurd-private/
-.kodyurd-public/
+.kodyurd-*/
 .data/
 .tripo/
-/scripts/asset-pack/
-/docs/knowledge-city-v2/
-/docs/DEVELOPMENT-PLAN.md
-/docs/REFERENCE-NOTES.md
-/docs/release.workflow.yml
 /packages/server/scene-references/
-
-# Raw maintainer assets. The release builder stages sanitized copies.
-/packages/assets/models/
-/packages/assets/manifest.json
 
 # Local agent, editor and machine configuration
 .agents/
@@ -57,8 +45,6 @@ CLAUDE.local.md
 .DS_Store
 Thumbs.db
 
-# Sanitized model pack included in this source release.
-!/packages/assets/models/
+# Only bundled GLBs belong in the model directory.
 /packages/assets/models/*
 !/packages/assets/models/*.glb
-!/packages/assets/manifest.json

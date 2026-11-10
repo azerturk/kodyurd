@@ -28,5 +28,5 @@ Choose **Export bundle** from a workspace with a saved city. The ZIP includes th
 - Use `npm run doctor` to check Node, provider commands and the local environment.
 - If a provider is unavailable, check that its CLI is installed and authenticated, or verify the Anthropic key from Settings.
 - If the job is partial, open its details to see the missing deliverable or source coverage. Retry after adjusting the brief or source scan.
-- If an editor cannot open directly, use **Copy file and line** in Source Inspector.
+- If an editor cannot open directly, use **Copy path:line** or **Copy path** in Source Inspector.
 - If the opening models take too long to load, use **Retry**. The city uses a built-in visual for a missing or invalid model.

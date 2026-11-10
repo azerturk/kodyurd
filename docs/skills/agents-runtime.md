@@ -64,7 +64,7 @@ Rules that exist because we hit the failure:
 - For explicit replay comparisons, check the played actions and their terminal results. A retry title needs a sourced scheduling or wait step, and a recovery needs a successful outcome after that step. Keep a single real path valid for ordinary briefs. Documentation-only workspaces teach the authored design and do not require an executable replay.
 - Explain claims cite exact numbered packet spans. The server records their fingerprints, rejects rationale that is absent from its authored span, and connects a claim to an exact replay occurrence only when the supporting range also covers that event or step.
 - Verify the generation and replay path with the Harbor Desk sample when changing provider prompts. Use mock responses in automated tests, including an interrupted pass, unknown evidence and repeated branches. Claude Code and Codex use the same typed contract through separate adapters.
-- The public release uses text visual guidance. A maintainer checkout may attach approved reference images to supported calls. Check the rendered result using the [visual QA playbook](visual-qa.md). [Claude API output contracts](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+- Use text for visual guidance by default. When optional reference images are installed locally, supported calls may include one. Check the rendered result using the [visual QA playbook](visual-qa.md). [Claude API output contracts](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
 
 ## Job UX
 

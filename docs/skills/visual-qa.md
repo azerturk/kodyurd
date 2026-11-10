@@ -1,6 +1,6 @@
 # Skill: Visual QA in Kodyurd
 
-Use for changes to Studio, city composition, movement, diagrams, model placement, learning panels and offline export. Compare with the approved reference frames when available. Follow the area rules in [PlayCanvas](playcanvas.md) and [Tripo](tripo.md).
+Use for changes to Studio, city composition, movement, diagrams, model placement, learning panels and offline export. Compare with reference frames when available. Follow the area rules in [PlayCanvas](playcanvas.md) and [Tripo](tripo.md).
 
 ## Establish a comparable baseline
 
@@ -10,7 +10,7 @@ Use for changes to Studio, city composition, movement, diagrams, model placement
 
 ## Review each frame and route
 
-Score each item separately as pass, fail, or not applicable. For the owner review, set the required items before capture and target at least 9 of 10 applicable checks on each key frame. A clipped primary action, blocked route, unreadable required label, incorrect source, or unavailable equivalent keyboard action blocks acceptance regardless of visual score.
+Score each item separately as pass, fail, or not applicable. Set the required items before capture and target at least 9 of 10 applicable checks on each key frame. A clipped primary action, blocked route, unreadable required label, incorrect source, or unavailable equivalent keyboard action blocks acceptance regardless of visual score.
 
 1. The main subject and action are clear in the first viewport.
 2. Foreground, midground, and background establish depth and orientation.
