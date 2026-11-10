@@ -47,9 +47,14 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
 
     const origin = req.headers.origin;
     const fetchSite = req.headers["sec-fetch-site"];
-    const foreignApiRequest = req.routeOptions.url?.startsWith("/api/")
-      && (fetchSite === "cross-site" || fetchSite === "same-site");
-    if (foreignApiRequest || (origin !== undefined && origin !== new URL(`http://${authority}`).origin)) {
+    const invalidOrigin = origin !== undefined && origin !== new URL(`http://${authority}`).origin;
+    const apiRequest = req.routeOptions.url?.startsWith("/api/");
+    // Same-origin reads can omit Origin and use Fetch Metadata instead.
+    const invalidApiSite = apiRequest && (
+      fetchSite === "cross-site" || fetchSite === "same-site"
+      || (origin === undefined && fetchSite !== "same-origin")
+    );
+    if (invalidOrigin || invalidApiSite) {
       return reply.code(403).send({ error: "Forbidden request." });
     }
   });

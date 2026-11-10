@@ -33,7 +33,7 @@ function send(server, path, { method = "GET", headers = {}, payload } = {}) {
   });
 }
 
-test("the local listener rejects foreign requests before accessing workspaces", async (t) => {
+test("the local listener requires same-origin context before accessing workspaces", async (t) => {
   const tempDir = await realpath(tmpdir());
   const fixture = await mkdtemp(join(tempDir, "kodyurd-local-http-"));
   assert.equal(dirname(fixture), tempDir);
@@ -62,6 +62,11 @@ test("the local listener rejects foreign requests before accessing workspaces", 
   const foreignHost = `foreign.example:${server.port}`;
   const foreignOrigin = "https://foreign.example";
   const wrongPort = server.port === 4717 ? 4718 : 4717;
+  const sameOrigin = { "sec-fetch-site": "same-origin" };
+  const directNavigation = await send(server, "/", {
+    headers: { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" }
+  });
+  assert.equal(directNavigation.status, 200);
   const navigation = await send(server, "/", {
     headers: { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" }
   });
@@ -69,7 +74,7 @@ test("the local listener rejects foreign requests before accessing workspaces", 
   assert.match(navigation.body, /Kodyurd test UI/);
   assert.equal((await send(server, "/", { headers: { host: foreignHost } })).status, 403);
 
-  const normalRead = await send(server, projectsPath);
+  const normalRead = await send(server, projectsPath, { headers: sameOrigin });
   assert.equal(normalRead.status, 200);
   assert.deepEqual(JSON.parse(normalRead.body), { projects: [] });
   const localhostRead = await send(server, projectsPath, {
@@ -78,15 +83,17 @@ test("the local listener rejects foreign requests before accessing workspaces", 
   assert.equal(localhostRead.status, 200);
 
   const rejectedReads = [
-    ["foreign Host without Origin", { host: foreignHost }],
+    ["foreign Host without Origin", { ...sameOrigin, host: foreignHost }],
     ["matching foreign Host and Origin", { host: foreignHost, origin: `http://${foreignHost}` }],
-    ["loopback Host with the wrong port", { host: `127.0.0.1:${wrongPort}` }],
+    ["loopback Host with the wrong port", { ...sameOrigin, host: `127.0.0.1:${wrongPort}` }],
     ["foreign Origin", { origin: foreignOrigin }],
     ["opaque Origin", { origin: "null" }],
     ["localhost Origin for a numeric loopback Host", { origin: `http://${localhost}` }],
     ["loopback Origin with the wrong port", { origin: `http://127.0.0.1:${wrongPort}` }],
     ["cross-site API request without Origin", { "sec-fetch-site": "cross-site" }],
-    ["same-site API request without Origin", { "sec-fetch-site": "same-site" }]
+    ["same-site API request without Origin", { "sec-fetch-site": "same-site" }],
+    ["direct API request without Origin", { "sec-fetch-site": "none" }],
+    ["API request without either context header", {}]
   ];
   for (const [label, headers] of rejectedReads) {
     assert.equal((await send(server, projectsPath, { headers })).status, 403, label);
@@ -94,7 +101,7 @@ test("the local listener rejects foreign requests before accessing workspaces", 
 
   const created = await send(server, projectsPath, {
     method: "POST",
-    headers: { origin: server.url, "sec-fetch-site": "same-origin" },
+    headers: { origin: server.url },
     payload: { name: "Local test workspace", sourceDir }
   });
   assert.equal(created.status, 200, created.body);
@@ -107,7 +114,9 @@ test("the local listener rejects foreign requests before accessing workspaces", 
     headers: { origin: foreignOrigin, "sec-fetch-site": "cross-site" }
   });
   assert.equal(refused.status, 403);
-  const remaining = await send(server, workspacePath);
+  const blindDelete = await send(server, workspacePath, { method: "DELETE" });
+  assert.equal(blindDelete.status, 403);
+  const remaining = await send(server, workspacePath, { headers: sameOrigin });
   assert.equal(remaining.status, 200);
   assert.equal(JSON.parse(remaining.body).project.id, project.id);
 });
