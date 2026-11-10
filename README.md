@@ -47,15 +47,20 @@ Kodyurd scans your files locally. Generation and Guide Q&A send bounded workspac
 - **Optional 3D generation:** Tripo API for custom model overlays
 - **Project tooling:** npm workspaces
 
-## Project status
+## Roadmap
 
 Kodyurd is in early development. The first public release focused on getting the core workflow working end to end, from scanning a repository to exploring it as a 3D city.
 
+- **Create cities from GitHub repositories.** Review the local scan and choose a provider before generating.
 - **Refine the architecture** by clarifying how the UI, 3D engine, and server interact.
 - **Improve the codebase** with a focus on code quality, consistency, and making it easier to maintain and extend.
 - **Expand what Kodyurd can do** by adding new ways to explore and understand repositories and improving the experience of using the tool.
 
-I have more ideas for Kodyurd and will share them as they take shape.
+### Ideas to explore
+
+- **Compare repository revisions** by highlighting changes to modules and their relationships in the city.
+- **Build and share custom tours** by choosing stops and adding notes for onboarding or architecture reviews.
+- **Jump from the editor to the city** by opening the module or lesson related to the file you are editing.
 
 ## Contribute
 
