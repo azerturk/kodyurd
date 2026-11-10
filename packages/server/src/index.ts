@@ -12,6 +12,8 @@ export type { AgentInfo, AgentId } from "./agents.js";
 export { analyzeSource, summarizeForPrompt } from "./analyzer.js";
 export type { AnalyzerReport } from "./analyzer.js";
 
+const loopbackHost = "127.0.0.1";
+
 export interface ServerOptions {
   /** Directory for SQLite and app data, e.g. ~/.kodyurd */
   dataDir: string;
@@ -31,6 +33,26 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   const app = Fastify({ logger: false });
   const db: SqliteDb = openDb(opts.dataDir);
   const version = opts.version ?? "0.1.0";
+
+  app.addHook("onRequest", async (req, reply) => {
+    const port = req.raw.socket.localPort;
+    const [host, duplicateHost] = req.raw.headersDistinct.host ?? [];
+    const authority = host?.toLowerCase();
+    const localHost = [loopbackHost, "localhost"].some(
+      (name) => authority === `${name}:${port}` || (port === 80 && authority === name)
+    );
+    if (port === undefined || duplicateHost !== undefined || !localHost) {
+      return reply.code(403).send({ error: "Forbidden request." });
+    }
+
+    const origin = req.headers.origin;
+    const fetchSite = req.headers["sec-fetch-site"];
+    const foreignApiRequest = req.routeOptions.url?.startsWith("/api/")
+      && (fetchSite === "cross-site" || fetchSite === "same-site");
+    if (foreignApiRequest || (origin !== undefined && origin !== new URL(`http://${authority}`).origin)) {
+      return reply.code(403).send({ error: "Forbidden request." });
+    }
+  });
 
   registerApi(app, { db, dataDir: opts.dataDir, version, uiDist: opts.uiDist });
 
@@ -52,9 +74,9 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
     }));
   }
 
-  const port = opts.port ?? 4717;
+  let url: string;
   try {
-    await app.listen({ port, host: "127.0.0.1" });
+    url = await app.listen({ port: opts.port ?? 4717, host: loopbackHost });
     db.prepare(
       "UPDATE jobs SET status = 'interrupted', updated_at = ? WHERE status IN ('queued', 'running')"
     ).run(new Date().toISOString());
@@ -66,8 +88,8 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   }
 
   return {
-    url: `http://127.0.0.1:${port}`,
-    port,
+    url,
+    port: Number(new URL(url).port || 80),
     close: async () => {
       await app.close();
       db.close();
