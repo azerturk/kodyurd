@@ -47,6 +47,16 @@ Kodyurd scans your files locally. Generation and Guide Q&A send bounded workspac
 - **Optional 3D generation:** Tripo API for custom model overlays
 - **Project tooling:** npm workspaces
 
+## Project status
+
+Kodyurd is in early development. The first public release focused on getting the core workflow working end to end, from scanning a repository to exploring it as a 3D city.
+
+- **Refine the architecture** by clarifying how the UI, 3D engine, and server interact.
+- **Improve the codebase** with a focus on code quality, consistency, and making it easier to maintain and extend.
+- **Expand what Kodyurd can do** by adding new ways to explore and understand repositories and improving the experience of using the tool.
+
+I have more ideas for Kodyurd and will share them as they take shape.
+
 ## Contribute
 
 Fork or clone the repository to develop the application. Run `npm run doctor` for environment checks and `npm run build` followed by `npm test` to check changes. [Architecture overview](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md)
