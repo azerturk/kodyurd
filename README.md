@@ -35,6 +35,18 @@ Harbor Desk is the included example workspace. It models office reservations and
 
 Kodyurd scans your files locally. Generation and Guide Q&A send bounded workspace excerpts to your selected provider. [Workspace guide](docs/USAGE.md) · [Privacy and network activity](docs/PRIVACY.md)
 
+## Tech stack
+
+- **Language:** TypeScript
+- **Frontend:** React, Tailwind CSS, and Vite
+- **3D rendering:** PlayCanvas with bundled GLB models
+- **Local server and CLI:** Node.js, with Fastify for the HTTP API
+- **Local storage:** SQLite via `node:sqlite`
+- **Scene validation:** Zod schemas for Scene JSON
+- **AI integrations:** Claude Code, Codex CLI, or the Anthropic API for city generation and workspace Q&A
+- **Optional 3D generation:** Tripo API for custom model overlays
+- **Project tooling:** npm workspaces
+
 ## Contribute
 
 Fork or clone the repository to develop the application. Run `npm run doctor` for environment checks and `npm run build` followed by `npm test` to check changes. [Architecture overview](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md)
