@@ -6,6 +6,8 @@ Kodyurd turns a local workspace into a walkable 3D city. Explore modules, inspec
 
 [Download the walkthrough (MP4, 4:17)](https://github.com/azerturk/kodyurd/releases/download/v0.6.0/Kodyurd-Walkthrough-EN.mp4)
 
+Walkthrough narration generated with [ElevenLabs](https://elevenlabs.io/).
+
 ## Run from source
 
 Install Node.js 22.13 or newer. In a clone of this repository, run:
