@@ -1,0 +1,14 @@
+{
+  "name": "@kodyurd/assets",
+  "version": "0.6.0",
+  "description": "Bundled GLB models for Kodyurd's semantic asset roles.",
+  "license": "SEE LICENSE IN README.md",
+  "files": [
+    "models",
+    "manifest.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

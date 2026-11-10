@@ -1,0 +1,36 @@
+# Kodyurd
+
+Kodyurd turns a local workspace into a walkable 3D city. Explore modules, inspect architecture and data relationships, replay evidenced behavior, read linked documents, and practice what you learned.
+
+## Run from source
+
+Install Node.js 22.13 or newer. In a clone of this repository, run:
+
+~~~sh
+npm ci
+npm run build
+npm start
+~~~
+
+Open `http://127.0.0.1:4717` if the browser does not open automatically. Generation uses your existing Claude Code or Codex CLI login, or your Anthropic API key. Choose a provider in **Settings**. Kodyurd stores workspace data under `~/.kodyurd` and serves the app from your computer.
+
+**The 85 bundled GLBs are in `packages/assets/models/`.** The app loads them locally and shows the opening view when its models are ready. Add your own Tripo API key in **Settings** if you want to generate a personal model. [Model guide](docs/ASSETS.md)
+
+## Try Harbor Desk
+
+Harbor Desk is the included example workspace. It models office reservations and asynchronous notifications. Select **Add workspace**, enter the full path to `examples/harbor-desk`, then generate a city with the [example brief](docs/USAGE.md#harbor-desk-walkthrough). The sample service can also run on its own. [Harbor Desk source and instructions](examples/harbor-desk/README.md)
+
+## Explore and share
+
+- **Explore architecture** opens the focused module's diagram. **Diagrams** lists component, behavior and data views that are available for this city.
+- **Replay scenario** opens the playable examples supported by source evidence. **Learn** contains tours, practice and exams.
+- **Docs** and diagram evidence open excerpts in the city or at a validated line in your editor.
+- **Export bundle** saves a static ZIP with the models used by the city. A static HTTP server can serve the extracted city. Review the scene text and model rights before sharing.
+
+Kodyurd scans your files locally. Generation and Guide Q&A send bounded workspace excerpts to your selected provider. [Workspace guide](docs/USAGE.md) · [Privacy and network activity](docs/PRIVACY.md)
+
+## Contribute
+
+Fork or clone the repository to develop the application. Run `npm run doctor` for environment checks and `npm run build` followed by `npm test` to check changes. [Architecture overview](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md)
+
+The source code is licensed under [MIT](LICENSE). See the [model pack notice](packages/assets/README.md) for the bundled assets.

@@ -1,0 +1,24 @@
+{
+  "name": "@kodyurd/scene-schema",
+  "version": "0.6.0",
+  "description": "Scene JSON contract for Kodyurd: agents write it, the engine renders it.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Harbor Desk</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/client.js"></script>
+</head>
+<body>
+  <header class="banner">
+    <div>
+      <p class="eyebrow">Harbor Workspaces</p>
+      <h1>Harbor Desk</h1>
+      <p>Book a desk or meeting room and follow your reservations.</p>
+    </div>
+    <label class="identity">Demo identity
+      <select id="identity">
+        <option value="alice">Alice · member</option>
+        <option value="bob">Bob · member</option>
+        <option value="morgan">Morgan · operator</option>
+      </select>
+    </label>
+  </header>
+  <main>
+    <section aria-labelledby="booking-title">
+      <p class="eyebrow">01 / Book a workspace</p>
+      <h2 id="booking-title">Your reservation</h2>
+      <form id="booking">
+        <label>Workspace <select name="resourceId" required></select></label>
+        <label>UTC date <input name="date" type="date" required></label>
+        <label>Start (UTC) <select name="start" required></select></label>
+        <label>End (UTC) <select name="end" required></select></label>
+        <label>Attendees <input name="attendees" type="number" min="1" value="1" required></label>
+        <div class="actions">
+          <button type="submit" value="quote" class="secondary">Get quote</button>
+          <button type="submit" value="book">Confirm booking</button>
+        </div>
+      </form>
+      <p id="quote" class="result" aria-live="polite">Select a workspace and time to see a price.</p>
+    </section>
+    <section aria-labelledby="reservations-title">
+      <p class="eyebrow">02 / Manage</p>
+      <h2 id="reservations-title">Reservations</h2>
+      <p id="reservation-scope"></p>
+      <ul id="reservations" class="entries"></ul>
+    </section>
+    <section aria-labelledby="mailbox-title">
+      <p class="eyebrow">03 / Updates</p>
+      <h2 id="mailbox-title">Local mailbox</h2>
+      <p>Confirmations and cancellations appear after the background worker delivers them.</p>
+      <button type="button" id="refresh" class="secondary">Refresh activity</button>
+      <ul id="mailbox" class="entries"></ul>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+  </main>
+</body>
+</html>

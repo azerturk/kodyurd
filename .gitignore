@@ -1,0 +1,64 @@
+# Generated dependencies, builds and caches
+node_modules/
+dist/
+coverage/
+.vite/
+.cache/
+*.tsbuildinfo
+
+# Local workspaces, private archives and release staging
+.kodyurd/
+.kodyurd-data/
+.kodyurd-dogfood/
+.kodyurd-private/
+.kodyurd-public/
+.data/
+.tripo/
+/scripts/asset-pack/
+/docs/knowledge-city-v2/
+/docs/DEVELOPMENT-PLAN.md
+/docs/REFERENCE-NOTES.md
+/docs/release.workflow.yml
+/packages/server/scene-references/
+
+# Raw maintainer assets. The release builder stages sanitized copies.
+/packages/assets/models/
+/packages/assets/manifest.json
+
+# Local agent, editor and machine configuration
+.agents/
+.claude/
+.codex/
+.cursor/
+.idea/
+.vscode/
+.mcp.json
+.netrc
+AGENTS.local.md
+CLAUDE.local.md
+*.local.json
+*.local.toml
+
+# Credentials, database state, logs and generated bundles
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.pfx
+*.p12
+*.sqlite*
+*.db
+*.db-*
+*.log
+*.zip
+*.tar.gz
+.DS_Store
+Thumbs.db
+
+# Sanitized model pack included in this source release.
+!/packages/assets/models/
+/packages/assets/models/*
+!/packages/assets/models/*.glb
+!/packages/assets/manifest.json

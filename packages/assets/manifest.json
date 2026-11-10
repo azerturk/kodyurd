@@ -1,0 +1,601 @@
+{
+  "schemaVersion": 1,
+  "license": "tripo-paid-tos-5.2.2",
+  "assets": [
+    {
+      "role": "bench",
+      "file": "models/bench.glb",
+      "bytes": 1742960,
+      "sha256": "9a99f11d94ab4bc40b1b250c652d83cfec5344550459d347083f7e7ffd7b85ac",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "bookshelf",
+      "file": "models/bookshelf.glb",
+      "bytes": 1929320,
+      "sha256": "569a79eb72f2d17b5cc7c79c675c78a3d9bb2609d150021c57d9694963e8f6f7",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "building-hall",
+      "file": "models/building-hall.glb",
+      "bytes": 3406648,
+      "sha256": "675a35480370cc64e347fa7b5073d8dbbe3e225123f996cb5e8f31bcbfb62e38",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "building-landmark",
+      "file": "models/building-landmark.glb",
+      "bytes": 2857816,
+      "sha256": "046a304ca4e994bc0f1d63d1e3ecdc05019b56a5437bcba3fd51b00e7ef5189b",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "building-low",
+      "file": "models/building-low.glb",
+      "bytes": 2503248,
+      "sha256": "48dc78743fdf3d91d0fa1dc4687672b413784c2e0c3370943f35f96c383d30e5",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "building-slab",
+      "file": "models/building-slab.glb",
+      "bytes": 3230312,
+      "sha256": "d43308b94355b457061ea6e7aa38206f233b125213e28fb2fb250453790e7a05",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "building-tower",
+      "file": "models/building-tower.glb",
+      "bytes": 5197120,
+      "sha256": "197a0afd2a5486f70957f52fbee2a50602544ad921b4d2769e7fc10fc7f0e6a9",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "bush-round",
+      "file": "models/bush-round.glb",
+      "bytes": 2856504,
+      "sha256": "5bc1650a724c7e5748afb7a00807b0ee349cee295cdaaa1c6ceb18672557774a",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "chair",
+      "file": "models/chair.glb",
+      "bytes": 1922048,
+      "sha256": "bf32826a500dde273feb79ec59da2dc428a1789e77c3556779d57311de126e1e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default",
+      "file": "models/character-default.glb",
+      "bytes": 2372472,
+      "sha256": "7ed24802f5fbbf939770dc5b4e49053e204a948a981da947b19d13ee3838ae41",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default.anim.idle",
+      "file": "models/character-default.anim.idle.glb",
+      "bytes": 2947276,
+      "sha256": "996542b8646720c9b7c4dea4bfb7f00d92df5189cc8fcd5e72701634c0b727c1",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default.anim.jump",
+      "file": "models/character-default.anim.jump.glb",
+      "bytes": 2614324,
+      "sha256": "574ab5d3a95c6870f7d7118d3105610c821a4f17017dfcaf576eef13d1ccde85",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default.anim.run",
+      "file": "models/character-default.anim.run.glb",
+      "bytes": 2571488,
+      "sha256": "54d2d80fd5a2395d338922146c9ce03dee72585e6db8736c24fad3a920a138cd",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default.anim.walk",
+      "file": "models/character-default.anim.walk.glb",
+      "bytes": 2584184,
+      "sha256": "05b5301cca181708678324d1810c0c6f0a98c7752078dc4213f011f7dc32264f",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "character-default.rigged",
+      "file": "models/character-default.rigged.glb",
+      "bytes": 2501392,
+      "sha256": "62a08dc9d16e949be8c9df06227d1e4559ee7f3f6e0b878bca6b139216fdca4d",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "door-frame",
+      "file": "models/door-frame.glb",
+      "bytes": 2075056,
+      "sha256": "f51a88867214f0aeb882e1a5e1f6a6ec456087171992b68b7f12d52bf05ad299",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "elevator-doors",
+      "file": "models/elevator-doors.glb",
+      "bytes": 1822180,
+      "sha256": "04334fa24e441f768ccbeb90f413e3eadaab1721b15ede6fdb00ea8bd5400eeb",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "floor-sign",
+      "file": "models/floor-sign.glb",
+      "bytes": 1375364,
+      "sha256": "58b89ec06f7808ea9489d1e0b17639e2e0b5d8b239e81dd75137a9b77ef7fbdd",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "gate-arch",
+      "file": "models/gate-arch.glb",
+      "bytes": 2029120,
+      "sha256": "227507b091eb89983ffc5202850771c7a9bb77a8441345533aabaf4d2b9c8438",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "gate-checkpoint",
+      "file": "models/gate-checkpoint.glb",
+      "bytes": 1911692,
+      "sha256": "42946686c5bd6a6891b5dfd9a2355e59112f8fd9fffc583b9ad2138c11d291a5",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-antenna",
+      "file": "models/icon-antenna.glb",
+      "bytes": 1730892,
+      "sha256": "9e192ebce0306cbbeaac5bcc92d97295679252afa3ca1d6ce7151d87793e391c",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-badge",
+      "file": "models/icon-badge.glb",
+      "bytes": 1758024,
+      "sha256": "c45ed2c62cd09a1330d3118e406b0a542726c22ca5792df708cad63bf6c20f8e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-bell",
+      "file": "models/icon-bell.glb",
+      "bytes": 1756808,
+      "sha256": "159f2e7982ab51899fde9b67aa84bbabac58043b1fd83510f5396d3b87d28fcd",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-book",
+      "file": "models/icon-book.glb",
+      "bytes": 1732436,
+      "sha256": "ddbfb24e70bb119cffd5fc95f457d3974570cddebbb2beb3c6181e2a14a02dbc",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-box",
+      "file": "models/icon-box.glb",
+      "bytes": 1673020,
+      "sha256": "17f47d0ddd02b50ceeba227db320ce81ae4204caf59dd693e0e46f84cebc1b6e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-bug",
+      "file": "models/icon-bug.glb",
+      "bytes": 1993296,
+      "sha256": "71b536eead82e76a82d83f22c009081ade06f3150b5f5bc60aab7fa57c574e4e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-cache",
+      "file": "models/icon-cache.glb",
+      "bytes": 1736192,
+      "sha256": "78c19630d249f240b7ccea236abf838e5db1ee9ffc953412a21412715238395b",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-calendar",
+      "file": "models/icon-calendar.glb",
+      "bytes": 967928,
+      "sha256": "8c597c8198ada955d0c9219fab6b54454b88adbd24178e8169cbb620f954d176",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-chain",
+      "file": "models/icon-chain.glb",
+      "bytes": 2278572,
+      "sha256": "85b5d3da2b0d6bacd38c9ec5a1ea6bfda1c85b62d79ec7345accb0e1d94ba347",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-chart",
+      "file": "models/icon-chart.glb",
+      "bytes": 1636668,
+      "sha256": "4c925810f42dc3eeaa17d421ce75f61bb742575d836d4cd21597f9f857132e23",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-chip",
+      "file": "models/icon-chip.glb",
+      "bytes": 1685104,
+      "sha256": "2b8ac77a24c20e70cf755fa86284529ae206ccaec1a286daf0bf828a79307741",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-clock",
+      "file": "models/icon-clock.glb",
+      "bytes": 1830352,
+      "sha256": "9e0a54f4b54c062258da5d618cd60bd0261d249f53afd2b86fc2c1af8d1f64a4",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-cloud",
+      "file": "models/icon-cloud.glb",
+      "bytes": 1811976,
+      "sha256": "9043734cf13628f67905b0614346aaea8b22e46b6bde54abc18a45b0fecf8f17",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-coin",
+      "file": "models/icon-coin.glb",
+      "bytes": 2512684,
+      "sha256": "9fef8be472f75ff0a4676dd89411302bac7a7149d02b011ad92a10d3ed315986",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-cycle",
+      "file": "models/icon-cycle.glb",
+      "bytes": 1723896,
+      "sha256": "96cb4edb0de8abd5ddce5430be0fbe4a8d77f8a35011987521b4cc93a371c2ce",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-database",
+      "file": "models/icon-database.glb",
+      "bytes": 1975024,
+      "sha256": "ae1e34a93ed66d31bce1037f271ce9f588892771b6001ec5c27ac90cad868879",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-document",
+      "file": "models/icon-document.glb",
+      "bytes": 1483764,
+      "sha256": "aa987e651de6200bb21a3f06e727c45c56d69d56fe42371c202f3a3c7a38fb52",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-envelope",
+      "file": "models/icon-envelope.glb",
+      "bytes": 1860984,
+      "sha256": "15d29a982c64b5c290a41701d6c0e0bb572021314ad5e95630029ec9da1af477",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-eye",
+      "file": "models/icon-eye.glb",
+      "bytes": 1646304,
+      "sha256": "dca1d35828ecb2f9195a6d530696efd56e882c67333aadb83827fc4599ebcbd6",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-factory",
+      "file": "models/icon-factory.glb",
+      "bytes": 917392,
+      "sha256": "d9ccef6c81835b4fb00b8941a6991b84d2946a3e08029afe4bb989eeab4903d2",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-flag",
+      "file": "models/icon-flag.glb",
+      "bytes": 1728312,
+      "sha256": "02bac510c167dec3c519e01a5621c8384bf02f9c3c392888dc4a97af0e5c0716",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-flask",
+      "file": "models/icon-flask.glb",
+      "bytes": 810528,
+      "sha256": "fddd910cab33d5955b575d6f1292b4e675f09df21bd03624be0db8180723f1ce",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-folder",
+      "file": "models/icon-folder.glb",
+      "bytes": 2157692,
+      "sha256": "9874b4f5b2025df6a858a59a056ae9c0c737646430b2cf0b1cbe7b93b2164982",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-funnel",
+      "file": "models/icon-funnel.glb",
+      "bytes": 1971376,
+      "sha256": "a7c9f747615978ad3a37115da1061b10707c1e919e174aaaf7bb245d5f42d2f2",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-gauge",
+      "file": "models/icon-gauge.glb",
+      "bytes": 1945756,
+      "sha256": "8b1f4fbaee4098b4eab85e18d1c270db745971e044954ae4e2320eca3588d3ec",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-gear",
+      "file": "models/icon-gear.glb",
+      "bytes": 1990540,
+      "sha256": "840678437dee14bac66099091d9a4f11a472b2ff704b6fee962bea59434ff975",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-globe",
+      "file": "models/icon-globe.glb",
+      "bytes": 2451116,
+      "sha256": "b4079663c68364aaa6ae52f64514e6658673bb1f49394eb08c26b0020ac106f2",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-grad-cap",
+      "file": "models/icon-grad-cap.glb",
+      "bytes": 1921624,
+      "sha256": "11cf75b6d48b5acbbb0cdf83a45387267228b8fec7782f58fb80a2cc89e6035e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-group",
+      "file": "models/icon-group.glb",
+      "bytes": 1964184,
+      "sha256": "9ba0ab8e719656d0e7122451f9578b512521331b1d1011b604f744dfb25ff5b6",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-image",
+      "file": "models/icon-image.glb",
+      "bytes": 1633208,
+      "sha256": "301c5d67485e7c5e92c9da75597b4fa0b03da2e0018a4785215079d8ecbb8658",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-key",
+      "file": "models/icon-key.glb",
+      "bytes": 1902608,
+      "sha256": "074d26020bab55c29240c6cd83e38ba848927ea02e91872a324f17bb119168a2",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-layers",
+      "file": "models/icon-layers.glb",
+      "bytes": 1650432,
+      "sha256": "f397feb7b3042a4a035a6733d5b160b8b8b8a1d72e08c70044b7553372012171",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-lock",
+      "file": "models/icon-lock.glb",
+      "bytes": 1358980,
+      "sha256": "5c3e5c2b8a008949305394f63bab97bad460626e2994229a3a5de21f7a3735d0",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-magnifier",
+      "file": "models/icon-magnifier.glb",
+      "bytes": 1837872,
+      "sha256": "a469942de6aa1e43598b144a29b9d70a16efcec256685f5038f0c8e340150eb3",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-monitor",
+      "file": "models/icon-monitor.glb",
+      "bytes": 1953388,
+      "sha256": "4ad2b0e30cb57537fd6a262b8bff063d0f485260203d0b172b66837df1079d59",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-phone",
+      "file": "models/icon-phone.glb",
+      "bytes": 1816636,
+      "sha256": "16dc8dc359317eee9275c931d0d30f644a82f4931b568bfa4d6cc496073abe44",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-pin",
+      "file": "models/icon-pin.glb",
+      "bytes": 1938500,
+      "sha256": "f7f95508c35a0a70462da491ac8f93e4115efeb816c4c75010a2375d72023df5",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-plug",
+      "file": "models/icon-plug.glb",
+      "bytes": 1559620,
+      "sha256": "8a83956f2458d95d1868f85bb0c65f490289129f4c92c3a5e869cefde3c88ceb",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-puzzle",
+      "file": "models/icon-puzzle.glb",
+      "bytes": 2129476,
+      "sha256": "85e1fe0a11cbc792f4ec6fdf46fbd0dea0f43b6b3b901492d4b292b1beb15da8",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-queue",
+      "file": "models/icon-queue.glb",
+      "bytes": 1787496,
+      "sha256": "4b36eaf1e15bd0e559d75b69d15d8bcc3f71d9aa25a0287e600a3c0125104591",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-robot",
+      "file": "models/icon-robot.glb",
+      "bytes": 2225416,
+      "sha256": "ebca62473281770038cf1bf0a38c8a6aec9b83ff854ca8e89ab96f639579f7b1",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-rocket",
+      "file": "models/icon-rocket.glb",
+      "bytes": 2019668,
+      "sha256": "e29362c3f870c396506a63f23e1417fd62f7522ae6e9f11f72bee3a8e2963907",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-scales",
+      "file": "models/icon-scales.glb",
+      "bytes": 3904476,
+      "sha256": "6a6a7ae57c26b6d865e7f3c16d4ff23a18ea354de48530e519f984961870ef16",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-server",
+      "file": "models/icon-server.glb",
+      "bytes": 1810900,
+      "sha256": "b163d452bf9986d39287d08323acaecdbe0edb2dc0bd8fcf2c4735120d1534b2",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-shield",
+      "file": "models/icon-shield.glb",
+      "bytes": 2313888,
+      "sha256": "fd84bb0c589bec8fa825b235b3525872c5fd3c23052d321eec0609d6b8d93807",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-speech",
+      "file": "models/icon-speech.glb",
+      "bytes": 1768576,
+      "sha256": "4d862b7339ece3b74c2ef529cc7ed63d18d711ea9e0df419f5bb9a9f7bb2d31e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-terminal",
+      "file": "models/icon-terminal.glb",
+      "bytes": 1552432,
+      "sha256": "26ba4c491b3cf0b268cc22713b02ddb5fdd6ad67727a8bb36869904477a937a6",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-truck",
+      "file": "models/icon-truck.glb",
+      "bytes": 1823228,
+      "sha256": "85cd04990ae3c229c0016034a52390b8dddf47d79e779eb4f24ddb8d4a6cb51c",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-user",
+      "file": "models/icon-user.glb",
+      "bytes": 1863084,
+      "sha256": "f20ada83b038a2784c84379119ccecf95e842803961b099b5d59fd987b49cc35",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-warning",
+      "file": "models/icon-warning.glb",
+      "bytes": 1739928,
+      "sha256": "892516be360444f037ff9f4c63d8d1259453f5d1c79b57b18b214e0f82e4ec95",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "icon-wrench",
+      "file": "models/icon-wrench.glb",
+      "bytes": 1145564,
+      "sha256": "af2a4354b63d7928816f42298d2244d3d6f1c70d35d348d570caa19984ef7d51",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "info-stand",
+      "file": "models/info-stand.glb",
+      "bytes": 1712880,
+      "sha256": "e166fc8df94ef33b79460008085b4d233724e2f990cd0da3a2b08bb3d1f7455d",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "lobby-plant",
+      "file": "models/lobby-plant.glb",
+      "bytes": 2548592,
+      "sha256": "0f29bcbea0a75ebaf7536ae5d920e083911e02c9197cf10da5e2d6eb6ed23044",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "obelisk-marker",
+      "file": "models/obelisk-marker.glb",
+      "bytes": 1403304,
+      "sha256": "9ecb6c694efc186176633a895503816b7074868466a6d77a1601eb6967b0365c",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "pedestal",
+      "file": "models/pedestal.glb",
+      "bytes": 1792484,
+      "sha256": "2e578976375fb191280c49180b1d73453b183036ea1a854a218e401294d0b5bf",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "planter-box",
+      "file": "models/planter-box.glb",
+      "bytes": 2456156,
+      "sha256": "e2dd1bb3c47b840dc899e19bb968794ff2bb3743461d9a4208ad7cb59b0e34ec",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "plaza-fountain",
+      "file": "models/plaza-fountain.glb",
+      "bytes": 2141536,
+      "sha256": "2988f9133b56f76f3282bc7bbe789075acbc440ed13859d71bb30c71e5713f5f",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "reception-desk",
+      "file": "models/reception-desk.glb",
+      "bytes": 2335512,
+      "sha256": "fc479cd001adfa694330a98269d2a7d52c09260ee46145f709a8c3f4277a512e",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "signpost",
+      "file": "models/signpost.glb",
+      "bytes": 2526068,
+      "sha256": "9a84698f87af5bbe7f087629d95a5936b87d3338503acae32b2e3df8a32c7861",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "sofa",
+      "file": "models/sofa.glb",
+      "bytes": 2066796,
+      "sha256": "8bd1bf92a2921abad71d70a2f3d8f179f25d6289200c312d049b53aced6b7d16",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "street-lamp",
+      "file": "models/street-lamp.glb",
+      "bytes": 1142608,
+      "sha256": "9d0ae6c233a28021bbb0dbda24032791a51b1efedf6a64763bd4388872934681",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "table-long",
+      "file": "models/table-long.glb",
+      "bytes": 1796836,
+      "sha256": "22fdce03886033713bc42e73a1c076be304f098cdc1d56d2d3e353be2f097dcc",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "tree-round",
+      "file": "models/tree-round.glb",
+      "bytes": 2822452,
+      "sha256": "49a3c260bee893a06e55178fd2bf8f032db7e00de7d16104786bd89645662735",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "tree-tall",
+      "file": "models/tree-tall.glb",
+      "bytes": 1777428,
+      "sha256": "bf4b3dce52077ef586e2be65508c449dfecc570d81c06169951b7519de9eb6d9",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
+      "role": "trophy",
+      "file": "models/trophy.glb",
+      "bytes": 1975164,
+      "sha256": "edc957d13f1395536af88cdb6010908d7117092bf4dfc1af880aef66800116ee",
+      "license": "tripo-paid-tos-5.2.2"
+    }
+  ]
+}

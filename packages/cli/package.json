@@ -1,0 +1,41 @@
+{
+  "name": "kodyurd",
+  "version": "0.6.0",
+  "description": "Turn any codebase into a walkable 3D space — locally, with your own AI agent.",
+  "keywords": [
+    "3d",
+    "codebase",
+    "visualization",
+    "onboarding",
+    "playcanvas",
+    "ai-agent",
+    "claude",
+    "local-first"
+  ],
+  "type": "module",
+  "bin": {
+    "kodyurd": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kodyurd/server": "0.6.0",
+    "@kodyurd/ui": "0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}
