@@ -4,7 +4,9 @@ Kodyurd turns a local workspace into a walkable 3D city. Explore modules, inspec
 
 [![Kodyurd walkthrough cover showing the Harbor Desk reservations building](docs/media/kodyurd-walkthrough.png)](https://github.com/azerturk/kodyurd/releases/download/v0.6.0/Kodyurd-Walkthrough-EN.mp4)
 
-[Download the walkthrough (MP4, 4:17)](https://github.com/azerturk/kodyurd/releases/download/v0.6.0/Kodyurd-Walkthrough-EN.mp4)
+[Download the 0.6.0 walkthrough (MP4, 4:17)](https://github.com/azerturk/kodyurd/releases/download/v0.6.0/Kodyurd-Walkthrough-EN.mp4)
+
+The video shows release 0.6.0. See the [changelog](CHANGELOG.md) for what was added since.
 
 Walkthrough narration generated with [ElevenLabs](https://elevenlabs.io/).
 
