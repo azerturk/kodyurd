@@ -28,10 +28,12 @@ Harbor Desk is the included example workspace. It models office reservations and
 
 ## Explore and share
 
+- **The brief** decides which buildings you can enter. Each part it asks about gets a lesson: at least two buildings, up to ten in one run, and **Build the remaining** adds the rest.
 - **Explore architecture** opens the focused module's diagram. **Diagrams** lists component, behavior and data views that are available for this city.
 - **Edit diagram** corrects a diagram, and **Draw or import a diagram** adds your own from scratch, Mermaid text or a diagrams.net file. Any diagram can be copied as Mermaid or downloaded as `.drawio`.
 - **Replay scenario** opens the playable examples supported by source evidence. **Learn** contains tours, practice and exams.
 - **Docs** and diagram evidence open excerpts in the city or at a validated line in your editor.
+- **Saved cities** keeps the latest city of each brief, so you can return to one without generating again.
 - **Export bundle** saves a static ZIP with the models used by the city. A static HTTP server can serve the extracted city. Review the scene text and model rights before sharing.
 
 Kodyurd scans your files locally. Generation and Guide Q&A send bounded workspace excerpts to your selected provider. [Workspace guide](docs/USAGE.md) · [Privacy and network activity](docs/PRIVACY.md)
