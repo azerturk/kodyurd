@@ -4,6 +4,7 @@ import type { SpaceDiagram, SpaceSource } from "../space-types";
 import type { DiagramPlayback, FlowPlayback, SpaceFocus, SpaceHandle } from "./space-engine";
 import { DocumentReader } from "./DocumentReader";
 import { DiagramViewSwitch } from "./DiagramExplanation";
+import { diagramTitle } from "./diagram-explanation";
 import { ReplayComparison } from "./ReplayComparison";
 import { evidenceInRange, readingEvidenceKey, type DocumentTarget, type ReadingEvidence } from "./document-navigation";
 import type { ReplayTrace } from "./flow-replay";
@@ -151,7 +152,7 @@ export function ReplayPanels({
   );
 }
 
-export function DiagramPanels({ inspect, controls, selection, clearSelection, openSource, openFlow, flowTitle, diagram, selectItem, showExplain }: {
+export function DiagramPanels({ inspect, controls, selection, clearSelection, openSource, openFlow, flowTitle, diagram, selectItem, showExplain, edit }: {
   inspect: DiagramPlayback;
   controls: SpaceHandle["inspect"] | undefined;
   selection?: SpaceFocus;
@@ -162,11 +163,10 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
   diagram?: SpaceDiagram;
   selectItem: (ref: string) => void;
   showExplain?: () => void;
+  edit?: () => void;
 }) {
   const plays = inspect.kind === "sequence" || !inspect.spatial;
-  const title = inspect.kind === "sequence" ? "Sequence diagram" : inspect.kind === "state" ? "State machine"
-    : inspect.kind === "matrix" ? "Decision table" : inspect.kind === "stack" ? "Layer map"
-      : inspect.kind === "timeline" ? "Timeline" : inspect.kind === "erd" ? "Data model (ERD)" : "Component map";
+  const title = inspect.kind === "sequence" ? "Sequence diagram" : diagramTitle({ kind: inspect.kind ?? "graph", id: inspect.diagramId });
   const nodeNames = new Map(diagram?.nodes.map((node) => [node.id, node.label]));
   const ref = (type: "node" | "edge", id: string) => `stage:diagram:${inspect.diagramId}:${type}:${id}`;
   const steps = Math.max(1, inspect.steps);
@@ -187,10 +187,15 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
           inspect.kind === "state" ? "Select a state or transition to inspect its trigger and source." :
           inspect.kind === "matrix" ? "Compare the conditions and their outcomes. Select a row to inspect its source." :
           inspect.kind === "erd" ? "Select an entity or relationship. Open Explain to see every field and cardinality." :
+          inspect.kind === "class" ? "Select a type or relationship. Open Explain to see every member." :
+          inspect.kind === "mindmap" ? "Follow the branches out from the central topic. Select a topic to inspect its source." :
+          inspect.kind === "timeline" ? "Read the entries in order. Select one to inspect its source." :
+          inspect.kind === "stack" ? "Read the layers from the base up. Select a layer to inspect its source." :
           "Select a component or relationship to inspect it."
         }</p>}
         {diagram?.note && <p>{diagram.note}</p>}
-        {diagram?.origin && <small className="kd-doc-origin">{diagram.origin === "code" ? "From code" : diagram.origin === "mermaid" ? "From a diagram in the docs" : "From documentation"}</small>}
+        {diagram?.origin && <small className="kd-doc-origin">{diagram.origin === "code" ? "From code" : diagram.origin === "mermaid" ? "From a diagram in the docs"
+          : diagram.origin === "user" ? "Edited in this workspace" : "From documentation"}</small>}
         {selection && <div className="kd-replay-step">
           <div className="kd-learn-eyebrow">{selection.kind === "edge" ? "Relationship" : "Component"}</div>
           <h3>{selection.title}</h3>
@@ -200,6 +205,7 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
         {inspect.spatial && <button type="button" className="kd-learn-action" onClick={() => controls?.fit()}>Fit diagram</button>}
         {openFlow && <button type="button" className="kd-learn-action kd-learn-primary" onClick={openFlow}>▷ Start {flowTitle ?? "scenario"}</button>}
         {inspect.source && <button type="button" className="kd-learn-action" onClick={() => openSource(inspect.source!, inspect.caption ?? inspect.title)}>Read source ↗</button>}
+        {edit && <button type="button" className="kd-learn-action" onClick={edit}>Edit diagram</button>}
         {inspect.spatial && diagram && <details className="kd-diagram-directory" open={diagram.kind === "matrix" || undefined}>
           <summary>{diagram.kind === "matrix" ? "Decision rows" : `Diagram index · ${diagram.nodes.length} items, ${diagram.edges.length} links`}</summary>
           {diagram.kind === "matrix" ? <div className="kd-doc-table" role="region" aria-label="Decision rows" tabIndex={0}>

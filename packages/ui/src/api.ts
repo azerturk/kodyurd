@@ -96,11 +96,24 @@ export interface JobStage {
 
 export interface GenerationDeliverable {
   id: string;
-  kind: "map" | "scenario" | "sequence" | "state" | "matrix";
+  kind: "map" | "scenario" | "sequence" | "state" | "matrix" | "erd" | "class" | "mindmap" | "context";
   title: string;
   state: "pending" | "running" | "ready" | "failed" | "timed-out";
   error?: string;
   reference?: string;
+}
+
+/** A city this workspace generated earlier; each brief keeps its latest one. */
+export interface SavedCity {
+  jobId: string;
+  brief: string;
+  language: string;
+  title: string;
+  savedAt: string;
+  buildings: number;
+  lessons: number;
+  diagrams: number;
+  flows: number;
 }
 
 export interface JobView {
@@ -115,6 +128,8 @@ export interface JobView {
   deliverables?: GenerationDeliverable[];
   focusReady?: boolean;
   draftAvailable?: boolean;
+  /** Buildings the brief asks about that wait beyond the lesson limit. */
+  lessonsWaiting?: number;
   quality?: {
     focusBuilding?: string;
     status: "ready" | "partial" | "pending";
@@ -146,6 +161,8 @@ export interface DocExcerpt {
   to: number;
   totalLines: number;
   text: string;
+  /** The same lines in Markdown terms, sent for reStructuredText and AsciiDoc. */
+  display?: string;
   sections?: { title?: string; startLine: number; endLine: number }[];
 }
 
@@ -237,6 +254,24 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
     }).then((r) => json<{ jobId: string }>(r)),
+  saveDiagram: (id: string, diagram: import("./space-types").SpaceDiagram, diagramId?: string) =>
+    fetch(`/api/projects/${id}/diagrams${diagramId ? `/${encodeURIComponent(diagramId)}` : ""}`, {
+      method: diagramId ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ diagram })
+    }).then((r) => json<{ diagram: import("./space-types").SpaceDiagram }>(r)),
+  removeDiagramEdit: (id: string, diagramId: string) =>
+    fetch(`/api/projects/${id}/diagrams/${encodeURIComponent(diagramId)}`, { method: "DELETE" }).then((r) => json<{ ok: boolean }>(r)),
+  importDiagram: (id: string, body: { format: "mermaid" | "drawio"; text: string; title?: string; owner?: string }) =>
+    fetch(`/api/projects/${id}/diagrams/import`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    }).then((r) => json<{ diagram: import("./space-types").SpaceDiagram }>(r)),
+  savedCities: (id: string) =>
+    fetch(`/api/projects/${id}/cities`).then((r) => json<{ current?: string; cities: SavedCity[] }>(r)),
+  openSavedCity: (id: string, jobId: string) =>
+    fetch(`/api/projects/${id}/cities/${jobId}/open`, { method: "POST" }).then((r) => json<{ city: SavedCity }>(r)),
+  removeSavedCity: (id: string, jobId: string) =>
+    fetch(`/api/projects/${id}/cities/${jobId}`, { method: "DELETE" }).then((r) => json<{ ok: boolean }>(r)),
+  continueLessons: (id: string, jobId: string) =>
+    fetch(`/api/projects/${id}/jobs/${jobId}/lessons/continue`, { method: "POST" }).then((r) => json<{ jobId: string }>(r)),
   retryDeliverable: (id: string, jobId: string, deliverableId: string) =>
     fetch(`/api/projects/${id}/jobs/${jobId}/deliverables/${encodeURIComponent(deliverableId)}/retry`, {
       method: "POST"

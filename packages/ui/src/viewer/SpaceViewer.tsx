@@ -3,9 +3,10 @@ import { api, type AskResult, type DocExcerpt } from "../api";
 import type { SpaceAssessmentQuestion, SpaceDiagram, SpaceOverlay, SpacePayload, SpaceSource, SpaceTourStop } from "../space-types";
 import { questionsFor, readProgress, saveProgress } from "./assessment";
 import { cityRelationships } from "./city-relations";
+import { DiagramEditor, EDITABLE_KINDS, starterDiagram } from "./DiagramEditor";
 import { DiagramExplanation } from "./DiagramExplanation";
-import { diagramKindTitle } from "./diagram-explanation";
-import { documentSection, evidenceInRange, evidenceViaSourceLinks, indexReadingEvidence, relatedReadingEvidence, type DocumentTarget, type ReadingEvidence } from "./document-navigation";
+import { diagramTitle } from "./diagram-explanation";
+import { documentSection, evidenceInRange, evidenceViaSourceLinks, indexReadingEvidence, isDocumentPath, relatedReadingEvidence, type DocumentTarget, type ReadingEvidence } from "./document-navigation";
 import { buildFlowReplay } from "./flow-replay";
 import { LearningActivities, type LearningTab } from "./LearningActivities";
 import { DiagramPanels, FocusEntrance, ReplayPanels, SourceInspector, type ReadingSelection } from "./LearningPanels";
@@ -29,6 +30,9 @@ import {
 
 type DrawerTab = "buildings" | "diagrams" | "flows" | "docs" | "learn" | "guide";
 type DiagramReturn = { diagram: string; selection?: string; camera?: ReturnType<SpaceHandle["inspect"]["bookmark"]>; flow: string; view: "Explain" | "Inspect" };
+
+/** Diagrams whose nodes and links open in the Explain panel. */
+const explainable = ({ kind }: SpaceDiagram): boolean => kind === "graph" || kind === "erd" || kind === "class" || kind === "mindmap";
 
 function unlockView(): void {
   if (document.pointerLockElement) document.exitPointerLock();
@@ -78,6 +82,12 @@ function SpaceViewerAttempt({
   const [inspect, setInspect] = useState<DiagramPlayback | null>(null);
   const [replay, setReplay] = useState<FlowPlayback | null>(null);
   const [explainId, setExplainId] = useState<string>();
+  // The diagram open in the editor, the city revision its saves create, and the diagram to reopen after one.
+  const [editing, setEditing] = useState<{ diagram: SpaceDiagram; isNew: boolean } | null>(null);
+  const [revision, setRevision] = useState(0);
+  const reopen = useRef<string>();
+  const [importText, setImportText] = useState("");
+  const [importNote, setImportNote] = useState<string>();
   const [diagramReturn, setDiagramReturn] = useState<DiagramReturn | null>(null);
   const [pinDirectory, setPinDirectory] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -151,7 +161,7 @@ function SpaceViewerAttempt({
       controller.abort();
       window.clearTimeout(deadline);
     };
-  }, [id, offline, draftJobId]);
+  }, [id, offline, draftJobId, revision]);
 
   useEffect(() => {
     if (error || !payload || !canvasRef.current || packRoles === null || overlays === null) return;
@@ -205,10 +215,12 @@ function SpaceViewerAttempt({
       return;
     }
     handleRef.current = handle;
-    const linkedDiagram = payload.space.diagrams.find(({ id }) => id === initialArtifact);
+    const opened = reopen.current ?? initialArtifact;
+    reopen.current = undefined;
+    const linkedDiagram = payload.space.diagrams.find(({ id }) => id === opened);
     if (linkedDiagram) {
       handle.focusRef(linkedDiagram.id);
-      setExplainId(linkedDiagram.kind === "graph" || linkedDiagram.kind === "erd" ? linkedDiagram.id : undefined);
+      setExplainId(explainable(linkedDiagram) ? linkedDiagram.id : undefined);
     } else if (initialArtifact && payload.space.flows.some(({ id }) => id === initialArtifact)) handle.focusRef(initialArtifact);
     const systemMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let motion: string | null = null;
@@ -275,7 +287,7 @@ function SpaceViewerAttempt({
     [id, offline]
   );
   const openSource = useCallback((source: SpaceSource, title?: string): void => {
-    openReading({ path: source.path, from: source.startLine, to: source.endLine }, title, /\.md$/i.test(source.path));
+    openReading({ path: source.path, from: source.startLine, to: source.endLine }, title, isDocumentPath(source.path));
   }, [openReading]);
   const closeReading = useCallback((): void => {
     readingRequest.current += 1;
@@ -296,7 +308,7 @@ function SpaceViewerAttempt({
     handleRef.current?.inspect.pause();
     setReading(selection);
   };
-  const browseReading = (target: DocumentTarget, asDocument = /\.md$/i.test(target.path)): void => {
+  const browseReading = (target: DocumentTarget, asDocument = isDocumentPath(target.path)): void => {
     setReadingTrail([]);
     setReadingResume(null);
     openReading(target, undefined, asDocument);
@@ -427,8 +439,34 @@ function SpaceViewerAttempt({
   const openDiagram = (diagram: SpaceDiagram): void => {
     unlockView();
     handleRef.current?.focusRef(diagram.id);
-    setExplainId(diagram.kind === "graph" || diagram.kind === "erd" ? diagram.id : undefined);
+    setExplainId(explainable(diagram) ? diagram.id : undefined);
     setDrawer(false);
+  };
+  // Editing is for the live city of a workspace; a draft or an exported bundle is read-only.
+  const canEdit = Boolean(id && !offline && !draftJobId);
+  const editDiagram = (diagram: SpaceDiagram, isNew = false): void => {
+    unlockView();
+    handleRef.current?.inspect.pause();
+    setDrawer(false);
+    setEditing({ diagram, isNew });
+  };
+  const reloadCity = (diagramId?: string): void => {
+    reopen.current = diagramId;
+    setEditing(null);
+    setRevision((value) => value + 1);
+  };
+  const saveDiagram = async (diagram: SpaceDiagram): Promise<void> => {
+    if (!id || !editing) return;
+    const saved = await api.saveDiagram(id, diagram, editing.isNew ? undefined : editing.diagram.id);
+    reloadCity(saved.diagram.id);
+  };
+  const importDiagram = (format: "mermaid" | "drawio", text: string): void => {
+    if (!id || !text.trim()) return;
+    setImportNote(undefined);
+    api.importDiagram(id, { format, text }).then(({ diagram }) => {
+      setImportText("");
+      editDiagram(diagram, true);
+    }).catch((error: unknown) => setImportNote(error instanceof Error ? error.message : "The diagram could not be read."));
   };
   const openReplay = ({ flow, scenario, step, stepIndex }: NonNullable<SpaceAssessmentQuestion["replay"]>): boolean => {
     const handle = handleRef.current;
@@ -601,9 +639,9 @@ function SpaceViewerAttempt({
     const rows = (space?.diagrams ?? []).map((diagram) => ({
       diagram,
       owner: diagram.owner === "city" ? "City" : buildings.get(diagram.owner.split(":")[0]) ?? "Building",
-      kind: diagramKindTitle[diagram.kind]
+      kind: diagramTitle(diagram)
     })).filter(({ diagram, owner, kind }) => `${diagram.title} ${owner} ${kind}`.toLowerCase().includes(query));
-    const isArchitecture = ({ diagram }: typeof rows[number]): boolean => diagram.kind === "graph" || diagram.kind === "stack" || diagram.kind === "erd";
+    const isArchitecture = ({ diagram }: typeof rows[number]): boolean => diagram.kind === "graph" || diagram.kind === "stack" || diagram.kind === "erd" || diagram.kind === "class" || diagram.kind === "mindmap";
     return [
       { title: "Architecture", rows: rows.filter(isArchitecture) },
       { title: "Behavior and rules", rows: rows.filter((row) => !isArchitecture(row)) }
@@ -694,7 +732,7 @@ function SpaceViewerAttempt({
                 ? "E — open diagram"
                 : undefined;
   const interaction = eHint?.startsWith("E — ") ? eHint.slice(4) : undefined;
-  const showWorldHud = !replay && !inspect && !drawer && !reading && !stop && !elevator;
+  const showWorldHud = !replay && !inspect && !drawer && !reading && !stop && !elevator && !editing;
   const hasDirectory = Boolean(showWorldHud && interiorLocation === "lobby" && mode.buildingId && !locked && !overview);
   const hasNearby = Boolean(showWorldHud && focus && !showEntrance);
   const hudPanel = worldHudPanel(hasDirectory, hasNearby, Boolean(interaction || focusSource), pinDirectory);
@@ -802,7 +840,7 @@ function SpaceViewerAttempt({
 
       {payload && !locked && !overview && !drawer && !reading && !elevator && !replay && !inspect && !stop && !focus && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/70 px-3 py-2 text-[11px] text-white backdrop-blur">
-          Click to look around · WASD walk · E interact · M map
+          Click to look around · WASD walk · ← → turn · E interact · M map
         </div>
       )}
 
@@ -826,7 +864,7 @@ function SpaceViewerAttempt({
         </aside>
       )}
 
-      {showEntrance && startBuilding && (
+      {showEntrance && startBuilding && !editing && (
         <FocusEntrance
           title={startBuilding.title}
           flowTitle={startFlow?.title}
@@ -899,7 +937,20 @@ function SpaceViewerAttempt({
         ask={!offline ? () => openGuide() : undefined}
       />}
 
-      {inspect && !replay && !drawer && !reading && explaining && activeDiagram && <DiagramExplanation
+      {editing && !drawer && !reading && space && <DiagramEditor
+        key={`${editing.diagram.id}:${revision}`}
+        diagram={editing.diagram} isNew={editing.isNew}
+        canRestore={!editing.isNew && editing.diagram.origin === "user"}
+        positions={payload?.layout.diagrams[editing.diagram.id]?.nodes}
+        buildings={space.city.buildings.map(({ id: buildingId, title }) => ({ id: buildingId, title }))}
+        save={saveDiagram}
+        restore={id ? async () => {
+          await api.removeDiagramEdit(id, editing.diagram.id);
+          reloadCity(editing.diagram.id.startsWith("user-") ? undefined : editing.diagram.id);
+        } : undefined}
+        close={() => setEditing(null)}
+      />}
+      {inspect && !replay && !drawer && !reading && !editing && explaining && activeDiagram && <DiagramExplanation
         diagram={activeDiagram}
         owner={activeDiagram.owner === "city" ? "City" : space?.city.buildings.find((building) => building.id === activeDiagram.owner.split(":")[0])?.title ?? "Building"}
         selectedRef={selectedDiagramItem?.ref}
@@ -913,14 +964,16 @@ function SpaceViewerAttempt({
         showInspect={() => setExplainId(undefined)}
         relatedReplays={relatedExplanationReplays}
         ask={!offline ? () => openGuide() : undefined}
+        edit={canEdit ? () => editDiagram(activeDiagram) : undefined}
       />}
-      {inspect && !replay && !drawer && !reading && !explaining && <DiagramPanels
+      {inspect && !replay && !drawer && !reading && !editing && !explaining && <DiagramPanels
         inspect={inspect} controls={handleRef.current?.inspect} openSource={openSource}
         selection={selectedDiagramItem} clearSelection={() => setFocus(null)}
         diagram={activeDiagram}
         selectItem={(ref) => handleRef.current?.focusRef(ref)}
         flowTitle={diagramFlow?.title} openFlow={diagramFlow && (() => openReplay({ flow: diagramFlow.id }))}
         showExplain={inspect.spatial && activeDiagram ? () => { handleRef.current?.inspect.pause(); setExplainId(activeDiagram.id); } : undefined}
+        edit={canEdit && activeDiagram ? () => editDiagram(activeDiagram) : undefined}
       />}
 
       {/* tour bar */}
@@ -1118,6 +1171,29 @@ function SpaceViewerAttempt({
                 </div>
               ))}
             {tab === "diagrams" && <>
+              {canEdit && <details className="kd-diagram-directory kd-diagram-create">
+                <summary>Draw or import a diagram</summary>
+                <div className="kd-lesson-actions">
+                  {EDITABLE_KINDS.map(({ kind, label }) => <button key={kind} type="button" className="kd-learn-action"
+                    onClick={() => editDiagram(starterDiagram(kind, "city", `New ${label.toLowerCase()}`), true)}>{label}</button>)}
+                </div>
+                <label className="kd-editor-field">Mermaid text
+                  <textarea rows={4} value={importText} onChange={(event) => setImportText(event.target.value)}
+                    placeholder={"flowchart LR\n  A[Client] --> B[Service]"} />
+                </label>
+                <div className="kd-lesson-actions">
+                  <button type="button" className="kd-learn-action" disabled={!importText.trim()}
+                    onClick={() => importDiagram("mermaid", importText)}>Import Mermaid</button>
+                  <label className="kd-learn-action kd-editor-file">Import a .drawio file
+                    <input type="file" accept=".drawio,.xml,application/xml,text/xml" onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) file.text().then((text) => importDiagram("drawio", text)).catch(() => setImportNote("The file could not be read."));
+                    }} />
+                  </label>
+                </div>
+                {importNote && <p role="status" className="kd-editor-message">{importNote}</p>}
+              </details>}
               {!diagramDirectory.length && <p className="kd-lesson-muted">{space.diagrams.length ? "No diagrams match this search." : "No diagrams are available in this revision."}</p>}
               {diagramDirectory.map(({ title, rows }) => (
                 <section key={title} className="mb-3" aria-label={title}>
@@ -1439,7 +1515,7 @@ function SpaceViewerAttempt({
               const previous = captureReading(reading);
               setReadingTrail((trail) => [...trail.slice(-7), previous]);
               const section = target.anchor && target.path === reading.path ? documentSection(reading.excerpt?.sections, target.anchor) : undefined;
-              openReading(section ? { path: target.path, from: section.startLine, to: section.endLine } : target, undefined, /\.md$/i.test(target.path));
+              openReading(section ? { path: target.path, from: section.startLine, to: section.endLine } : target, undefined, isDocumentPath(target.path));
             },
             openDiagram: (ref) => {
               const item = readingIndex.get(reading.path.replaceAll("\\", "/"))?.find((entry) => entry.kind === "diagram" && entry.id === ref && !entry.itemRef);

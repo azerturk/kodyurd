@@ -8,8 +8,11 @@ Map:
 - `analyzer.ts` — deterministic, read-only scan: adaptive module discovery (recursive
   split), doc→module fuzzy mapping, cross-cutting detection, mermaid/table/decision
   block inventory. Framework-agnostic by rule — never special-case Laravel/React/etc.
-- `prompts/` — the **Agent Generation Playbook** (playbook.md + city-plan.md +
-  building-pass.md). These are injected into every P1/P2 run; they ARE product behavior.
+- `source-paths.ts`, `documents.ts`, `source-declarations.ts` — shared path rules (document
+  formats, test files), the line-for-line Markdown view of reStructuredText and AsciiDoc used by
+  the index, the Mermaid importer and the reader, and where a code excerpt opens per language.
+- `prompts/` — the **Agent Generation Playbook**: playbook.md and city-plan.md for the city
+  plan, focus-deliverable.md for each lesson part. They ARE product behavior.
   Edit with the same care as code; placeholders are `{{UPPER_SNAKE}}`.
 - `space-pipeline.ts` — P1/P2 prompt builders, `CityPlan`/`BuildingPass` zod gates,
   `assembleSpace`, `sanitizeSpace` (unresolved flow refs become `step:<slug>`, unknown
@@ -22,13 +25,24 @@ Map:
 - `space-layout/` — deterministic geometry (city, interior, diagram). Pure functions,
   no deps, no randomness: same document in → same layout out. The diagram layouter is
   written in-repo on purpose; do not import a graph library.
-- `jobs.ts` — job rows + `startSpaceJob` (the ONLY generation job: P1 → one repair max →
-  P2 passes in a concurrency pool with a per-building content-hash cache under
-  `projects/<id>/cache/` — an unchanged building loads from cache, so re-builds are
-  incremental; `fresh: true` bypasses it — plus one bounded empty-pass retry; an invalid
-  pass marks its building pending, the city still assembles → sanitize/validate → layout →
-  `space.json` + `offers.json`). The per-job model override threads through
-  `AgentRunOptions.model` (claude `--model` / codex `-m` / API body model).
+- `jobs.ts` — job rows + `startSpaceJob`, the ONLY generation job: city plan (one repair at
+  most) → lessons, each built from independent deliverables (`focus-generation.ts`) with a
+  content-hash cache per deliverable under `projects/<id>/cache/` (`fresh: true` bypasses it).
+  The focus and pinned lessons publish the city; lessons the brief adds follow two at a time,
+  and a failed one stays pending and is reported → sanitize/validate → layout → `space.json` +
+  `offers.json`. The per-job model override threads through `AgentRunOptions.model`
+  (claude `--model` / codex `-m` / API body model).
+- `diagram-edits.ts`, `drawio.ts` — the user's own diagrams (corrections, imports, drawings):
+  validated by the scene schema, stored beside the city and laid over it on read. `drawio.ts`
+  reads the first page of a diagrams.net file; pasted Mermaid goes through `authored-diagrams.ts`.
+  The editor can never add a citation or a claim — only the saved diagram supplies them.
+- `lesson-plan.ts` — which buildings one job teaches: the focus, pinned modules and the buildings
+  the plan read out of the brief, with the bounds that keep a job finite.
+- `guide.ts` — the in-scene guide: one awaited agent answer, cited from the open city's evidence.
+- `project-files.ts`, `saved-cities.ts` — where a workspace keeps its generated files, and the
+  bounded list of cities it has generated: one per brief, the newest generation replacing the
+  earlier one. Opening an entry copies its draft back to `space.json`; generations that are
+  neither listed nor recent are removed.
 - `startOverlayJob` — one offered overlay per click with the USER'S Tripo key
   (receipt law + global prompt-hash cache via `generateOverlayModel`); classes
   landmark/centerpiece/emblem/icon. A character uses a local rigged model pack.
@@ -46,10 +60,9 @@ Map:
   `KODYURD_EDITOR` overrides).
 
 Use bounded loops and one Zod repair per agent call. Configure timeouts with
-`KODYURD_AGENT_TIMEOUT_MS` and `KODYURD_ASK_TIMEOUT_MS`. The optional P2 fan-out
-uses `KODYURD_P2_LIMIT` (default 3), `KODYURD_P2_CONCURRENCY` (default 2) and
-`KODYURD_FULL_INTERIORS` (default 3). Keep stage lines short, honest and in the
-present tense. Keep prompts and keys out of logs.
+`KODYURD_AGENT_TIMEOUT_MS` and `KODYURD_ASK_TIMEOUT_MS`. The brief decides how many
+buildings get a lesson; the bounds (`LESSON_FLOOR`, `LESSON_CEILING`, `LESSON_POOL`)
+live in `jobs.ts`. Keep stage lines short, honest and in the present tense. Keep prompts and keys out of logs.
 
 Typecheck: `npx tsc -p packages/scene-schema/tsconfig.json && npx tsc -p
 packages/server/tsconfig.json --noEmit`.

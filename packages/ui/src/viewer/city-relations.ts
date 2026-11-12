@@ -17,7 +17,7 @@ function nodeBuilding(node: SpaceDiagramNode, buildings: SpaceBuilding[], cityOw
     if (matches.length === 1) return matches[0].id;
   }
   const path = node.source?.path.replaceAll("\\", "/");
-  if (!path || /\.(md|markdown|mdx|rst|adoc|txt)$/i.test(path)) return undefined;
+  if (!path || /\.(md|markdown|mdx|rst|adoc|asciidoc|txt)$/i.test(path)) return undefined;
   const matches = buildings.filter(({ moduleRef }) => path === moduleRef || path.startsWith(`${moduleRef}/`))
     .sort((a, b) => b.moduleRef.length - a.moduleRef.length);
   return matches[0] && matches[0].moduleRef.length !== matches[1]?.moduleRef.length ? matches[0].id : undefined;

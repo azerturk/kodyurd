@@ -36,7 +36,7 @@ export const PANEL_VARIANTS = ["standard", "wide", "tall", "billboard"] as const
 export const CAMERA_ANGLES = ["front", "three-quarter", "high", "low", "orbit"] as const;
 export const CAMERA_KINDS = ["inspect", "tour", "reveal"] as const;
 export const TOUR_PACING = ["calm", "normal", "brisk"] as const;
-export const DIAGRAM_KINDS = ["graph", "sequence", "state", "stack", "timeline", "matrix", "erd"] as const;
+export const DIAGRAM_KINDS = ["graph", "sequence", "state", "stack", "timeline", "matrix", "erd", "class", "mindmap"] as const;
 export const DIAGRAM_NODE_HINTS = ["service", "store", "external", "ui", "actor", "event", "queue", "decision", "state", "initial", "terminal"] as const;
 export const DIAGRAM_EDGE_KINDS = ["solid", "dashed", "async", "return"] as const;
 export const DIAGRAM_FIELD_KEYS = ["PK", "FK", "UK"] as const;
@@ -316,8 +316,11 @@ export const SpaceDiagram = z
     claims: z.array(DiagramClaim).max(24).optional(),
     note: z.string().max(240).optional(),
     source: SrcRef.optional(),
-    /** Where this diagram came from. Mermaid/tables found by P0 are parsed, never re-invented. */
-    origin: z.enum(["docs", "code", "mermaid"]).optional()
+    /**
+     * Where this diagram came from. Mermaid/tables found by P0 are parsed, never re-invented.
+     * "user" marks a diagram the user corrected, imported or drew; agents never emit it.
+     */
+    origin: z.enum(["docs", "code", "mermaid", "user"]).optional()
   })
   .superRefine((d, ctx) => {
     if (d.kind !== "erd" && d.nodes.length < 2) {
@@ -327,7 +330,7 @@ export const SpaceDiagram = z
     if (ids.size !== d.nodes.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes"], message: "duplicate node ids" });
     }
-    if (d.kind === "erd") {
+    if (d.kind === "erd" || d.kind === "class") {
       for (const [index, { fields }] of d.nodes.entries()) {
         if (fields && new Set(fields.map(({ name }) => name)).size !== fields.length) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes", index, "fields"], message: "duplicate field names" });

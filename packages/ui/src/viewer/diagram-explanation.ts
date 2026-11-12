@@ -1,9 +1,13 @@
 import type { SpaceDiagram, SpaceDiagramClaim, SpaceDiagramField, SpaceSource } from "../space-types";
 
-export const diagramKindTitle: Record<SpaceDiagram["kind"], string> = {
+const diagramKindTitle: Record<SpaceDiagram["kind"], string> = {
   graph: "Component map", sequence: "Sequence", state: "State machine", matrix: "Decision table", stack: "Layer map", timeline: "Timeline",
-  erd: "Data model (ERD)"
+  erd: "Data model (ERD)", class: "Class diagram", mindmap: "Mind map"
 };
+
+/** What a learner calls this diagram. A lesson's system context view is a graph named by its view. */
+export const diagramTitle = ({ kind, id }: Pick<SpaceDiagram, "kind" | "id">): string =>
+  kind === "graph" && id.startsWith("kc-context-") ? "System context" : diagramKindTitle[kind];
 
 type Item = { id: string; ref: string; label: string; source?: SpaceSource };
 type DiagramConnection = Item & { kind: "edge"; from: string; to: string; relation?: string; guard?: string; authoredId?: string;

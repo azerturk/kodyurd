@@ -1,5 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { asMarkdown } from "./documents.js";
+import { isDocumentPath, isTestPath } from "./source-paths.js";
 
 /**
  * Read-only codebase analyzer. Never writes into the source directory.
@@ -106,8 +108,19 @@ const TEXT_EXT = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".php", ".py", ".rb", ".go",
   ".rs", ".java", ".kt", ".cs", ".cpp", ".c", ".h", ".css", ".scss", ".html",
   ".vue", ".svelte", ".json", ".yml", ".yaml", ".md", ".sql", ".sh", ".ps1",
-  ".xml", ".toml", ".ini"
+  ".xml", ".toml", ".ini",
+  // More source languages, counted and offered as evidence like the ones above.
+  ".swift", ".dart", ".scala", ".sc", ".kts", ".ex", ".exs", ".erl", ".hrl", ".lua",
+  ".zig", ".nim", ".hs", ".ml", ".mli", ".fs", ".fsx", ".clj", ".cljs", ".cljc",
+  ".groovy", ".gradle", ".pl", ".pm", ".r", ".jl", ".m", ".mm", ".cc", ".cxx",
+  ".hpp", ".hh", ".vb", ".sol", ".tf", ".proto", ".graphql", ".gql", ".astro",
+  ".less", ".sass", ".bash", ".zsh", ".bat", ".cmd",
+  // Document formats indexed beside Markdown.
+  ".markdown", ".mdx", ".rst", ".adoc", ".asciidoc"
 ]);
+
+// Entry points named by language convention rather than by role.
+const LANGUAGE_ENTRY = /(?:^|\/)(?:(?:lib|mod)\.rs|(?:Program|Startup)\.cs|(?:application|endpoint|router)\.exs?|App(?:Delegate)?\.swift|(?:App|Application)\.(?:scala|kt|java|dart))$/;
 
 const MAX_FILES = 12000;
 const MAX_DEPTH = 10;
@@ -267,13 +280,13 @@ function discoverModules(records: FileRecord[]): ModuleSummary[] {
     }
     top.sort((a, b) => b.loc - a.loc);
     const entryFiles = top
-      .filter((f) => /(?:^|[/_.-])(?:routes?|controllers?|handlers?|actions?|entry|index|main|bootstrap|middleware|config|services?|providers?)(?:[/_.-]|$)/i.test(f.path))
-      .filter((f) => f.loc > 0 && !/\.(md|css|scss|html|svg)$/i.test(f.path))
+      .filter((f) => /(?:^|[/_.-])(?:routes?|controllers?|handlers?|actions?|entry|index|main|bootstrap|middleware|config|services?|providers?)(?:[/_.-]|$)/i.test(f.path) || LANGUAGE_ENTRY.test(f.path))
+      .filter((f) => f.loc > 0 && !/\.(css|scss|html|svg)$/i.test(f.path) && !isDocumentPath(f.path))
       .slice(0, 144)
       .map((f) => f.path);
-    const testFiles = top.filter((f) => f.loc > 0 && /(?:^|[/_.-])(?:tests?|specs?|__tests__)(?:[/_.-]|$)/i.test(f.path))
+    const testFiles = top.filter((f) => f.loc > 0 && isTestPath(f.path))
       .slice(0, 24).map((f) => f.path);
-    const sourceFiles = top.filter((f) => f.loc > 0 && !/\.(?:md|json|ya?ml|toml|ini|xml|css|scss)$/i.test(f.path))
+    const sourceFiles = top.filter((f) => f.loc > 0 && !/\.(?:json|ya?ml|toml|ini|xml|css|scss)$/i.test(f.path) && !isDocumentPath(f.path))
       .slice(0, 48).map((f) => f.path);
     modules.push({ name: g.key, files: g.files.length, loc, topFiles: top.slice(0, 5), sourceFiles, entryFiles, testFiles });
   }
@@ -356,6 +369,11 @@ export function indexMarkdown(text: string): { blocks: DocBlockCounts; sections:
 
 export function extractBlocks(text: string): DocBlockCounts {
   return indexMarkdown(text).blocks;
+}
+
+/** Index a document of any supported format; line numbers refer to the file as written. */
+export function indexDocument(text: string, file: string): { blocks: DocBlockCounts; sections: DocSection[] } {
+  return indexMarkdown(asMarkdown(text, file));
 }
 
 function titleOf(text: string): string | undefined {
@@ -500,7 +518,7 @@ export async function analyzeSource(sourceDir: string): Promise<AnalyzerReport> 
 
       records.push({ segs: relPosix.split("/"), relPosix, loc: fileLoc });
 
-      if (ext === ".md") {
+      if (isDocumentPath(entry.name)) {
         if (docRaws.length >= MAX_DOCS) { reached.add("docs"); continue; }
         let text = "";
         if (size <= MAX_DOC_BYTES) {
@@ -510,8 +528,9 @@ export async function analyzeSource(sourceDir: string): Promise<AnalyzerReport> 
             /* unreadable: keep counts at zero */
           }
         }
-        const { blocks, sections } = indexMarkdown(text);
-        docRaws.push({ path: relPosix, bytes: size, title: titleOf(text), blocks, sections, symbols: new Set(tokenize(text)) });
+        const markdown = asMarkdown(text, entry.name);
+        const { blocks, sections } = indexMarkdown(markdown);
+        docRaws.push({ path: relPosix, bytes: size, title: titleOf(markdown), blocks, sections, symbols: new Set(tokenize(text)) });
         if (!readmeExcerpt && /^readme/i.test(entry.name) && text) {
           readmeExcerpt = text.slice(0, 2000);
         }

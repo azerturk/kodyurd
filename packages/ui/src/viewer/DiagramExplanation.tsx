@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SpaceAssessmentQuestion, SpaceCardinality, SpaceDiagram, SpaceDiagramClaim, SpaceSource } from "../space-types";
-import { claimsForItem, connectionsForNode, diagramItems, diagramKindTitle, type DiagramItem } from "./diagram-explanation";
-import type { ReadingEvidence } from "./document-navigation";
+import { claimsForItem, connectionsForNode, diagramItems, diagramTitle, type DiagramItem } from "./diagram-explanation";
+import { isDocumentPath, type ReadingEvidence } from "./document-navigation";
 
 type ReplayTarget = NonNullable<SpaceAssessmentQuestion["replay"]>;
 type ReplayEvidence = Extract<ReadingEvidence, { kind: "replay" }>;
@@ -50,7 +50,7 @@ function Claim({ claim, openSource, openReplay }: { claim: SpaceDiagramClaim; op
 }
 
 export function DiagramExplanation({
-  diagram, owner, selectedRef, select, close, fit, openSource, openReplay, showInspect, relatedReplays, ask, topDown, toggleProjection
+  diagram, owner, selectedRef, select, close, fit, openSource, openReplay, showInspect, relatedReplays, ask, edit, topDown, toggleProjection
 }: {
   diagram: SpaceDiagram;
   owner: string;
@@ -63,6 +63,7 @@ export function DiagramExplanation({
   showInspect: () => void;
   relatedReplays: ReplayEvidence[];
   ask?: () => void;
+  edit?: () => void;
   topDown?: boolean;
   toggleProjection?: () => void;
 }) {
@@ -81,7 +82,10 @@ export function DiagramExplanation({
   const items = useMemo(() => diagramItems(diagram), [diagram]);
   const nodes = useMemo(() => new Map(items.filter((item) => item.kind === "node").map((node) => [node.id, node])), [items]);
   const selection = items.find((item) => item.ref === selectedRef);
-  const isDataModel = diagram.kind === "erd";
+  const isDataModel = diagram.kind === "erd" || diagram.kind === "class";
+  // A data model has entities with fields; a class diagram has types with members.
+  const record = diagram.kind === "class" ? "type" : "entity";
+  const Record = diagram.kind === "class" ? "Type" : "Entity";
   const fields = selection?.kind === "node" ? selection.fields : undefined;
   const claims = selection ? claimsForItem(diagram, selection) : [];
   const source = selection?.source ?? (!selection ? diagram.source : undefined);
@@ -95,7 +99,7 @@ export function DiagramExplanation({
   const buttonFor = (item: DiagramItem) => <button type="button" aria-pressed={item.ref === selectedRef}
     onClick={() => selectRelated(item.ref)}>
     <span>{item.label}</span>
-    <small>{item.kind === "node" ? item.group ?? (isDataModel ? "Entity" : "Node") : item.cardinality
+    <small>{item.kind === "node" ? item.group ?? (isDataModel ? Record : "Node") : item.cardinality
       ? `${item.cardinality.from} to ${item.cardinality.to}` : relationTitle(item.relation)}</small>
   </button>;
   const nodeButton = (id: string) => {
@@ -104,16 +108,17 @@ export function DiagramExplanation({
   };
   return <aside className="kd-learn-card kd-replay-inspector kd-explanation" aria-label="Diagram explanation">
     <div className="kd-learn-heading">
-      <div className="kd-learn-eyebrow"><span /> {diagramKindTitle[diagram.kind]} · {owner}</div>
+      <div className="kd-learn-eyebrow"><span /> {diagramTitle(diagram)} · {owner}</div>
       <button type="button" className="kd-learn-icon" onClick={close} aria-label="Close diagram">×</button>
     </div>
     <h2 ref={heading} tabIndex={-1}>{diagram.title}</h2>
     <DiagramViewSwitch mode="explain" onChange={(mode) => { if (mode === "inspect") showInspect(); }} />
     {diagram.note && <p className="kd-explain-note">{diagram.note}</p>}
     <section className="kd-explain-selection" aria-label="Current selection">
-      <div className="kd-learn-eyebrow">{selection?.kind === "edge" ? "Relationship" : selection ? isDataModel ? "Entity" : "Selected node" : "Diagram overview"}</div>
-      <h3 ref={selectionHeading} tabIndex={-1} aria-live="polite">{selection?.label ?? (isDataModel ? "Choose an entity or relationship" : "Choose a node or link")}</h3>
-      {!selection && <p>{isDataModel ? "Select an entity to inspect its fields and keys, or a relationship to read both cardinalities." :
+      <div className="kd-learn-eyebrow">{selection?.kind === "edge" ? "Relationship" : selection ? isDataModel ? Record : "Selected node" : "Diagram overview"}</div>
+      <h3 ref={selectionHeading} tabIndex={-1} aria-live="polite">{selection?.label ?? (isDataModel ? `Choose ${record === "entity" ? "an entity" : "a type"} or relationship` : "Choose a node or link")}</h3>
+      {!selection && <p>{diagram.kind === "class" ? "Select a type to inspect its members, or a relationship to read how the types relate."
+        : isDataModel ? "Select an entity to inspect its fields and keys, or a relationship to read both cardinalities." :
         "Select an item in the graph or the diagram index to see its relationships and evidence."}</p>}
       {selection?.kind === "node" && selection.group && <p>Group · {selection.group}</p>}
       {selection?.kind === "edge" && <dl className="kd-explain-direction">
@@ -124,14 +129,14 @@ export function DiagramExplanation({
         {selection.guard && <div><dt>Condition</dt><dd>{selection.guard}</dd></div>}
       </dl>}
       {source && <button type="button" className="kd-learn-action kd-explain-source" onClick={() => openSource(source)}>
-        {/\.md$/i.test(source.path) ? "Read document section" : "Read linked source"} <code>{lineLabel(source)}</code>
+        {isDocumentPath(source.path) ? "Read document section" : "Read linked source"} <code>{lineLabel(source)}</code>
       </button>}
       {selection && !claims.length && !isDataModel && <p className="kd-lesson-muted">No authored explanation was saved for this item.</p>}
     </section>
-    {fields && fields.length > 0 && <section className="kd-explain-section" aria-label="Entity fields">
-      <h3>Entity fields</h3>
-      <div className="kd-doc-table" role="region" aria-label="Fields and keys" tabIndex={0}>
-        <table><thead><tr><th scope="col">Field</th><th scope="col">Type</th><th scope="col">Keys</th></tr></thead>
+    {fields && fields.length > 0 && <section className="kd-explain-section" aria-label={`${Record} ${record === "type" ? "members" : "fields"}`}>
+      <h3>{Record} {record === "type" ? "members" : "fields"}</h3>
+      <div className="kd-doc-table" role="region" aria-label={record === "type" ? "Members and types" : "Fields and keys"} tabIndex={0}>
+        <table><thead><tr><th scope="col">{record === "type" ? "Member" : "Field"}</th><th scope="col">Type</th><th scope="col">Keys</th></tr></thead>
           <tbody>{fields.map((field) => <tr key={field.name}>
             <th scope="row">{field.source ? <button type="button" className="kd-doc-link" onClick={() => openSource(field.source!, field.name)}
               aria-label={`${field.name} source ${lineLabel(field.source)}`}><code>{field.name}</code></button> : <code>{field.name}</code>}
@@ -165,7 +170,7 @@ export function DiagramExplanation({
       <summary>Diagram index · {items.length}</summary>
       <label className="kd-scenario-picker">Items to show
         <select value={listKind} onChange={(event) => setListKind(event.target.value as typeof listKind)}>
-          <option value="all">All items</option><option value="node">{isDataModel ? "Entities" : "Nodes"}</option><option value="edge">Relationships</option>
+          <option value="all">All items</option><option value="node">{diagram.kind === "class" ? "Types" : isDataModel ? "Entities" : "Nodes"}</option><option value="edge">Relationships</option>
         </select>
       </label>
       <ul>{items.filter((item) => listKind === "all" || item.kind === listKind).map((item) =>
@@ -175,6 +180,7 @@ export function DiagramExplanation({
       <button type="button" className="kd-learn-action" onClick={fit}>Fit diagram</button>
       {toggleProjection && <button type="button" className="kd-learn-action" aria-pressed={Boolean(topDown)} onClick={toggleProjection}>Top view</button>}
       {ask && <button type="button" className="kd-learn-action" onClick={ask}>Ask the guide</button>}
+      {edit && <button type="button" className="kd-learn-action" onClick={edit}>Edit diagram</button>}
     </div>
   </aside>;
 }

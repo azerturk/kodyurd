@@ -1,6 +1,6 @@
 # 3D visuals and model packs
 
-The standard source release includes 85 GLBs in `packages/assets/models/` and a role index in `packages/assets/manifest.json`. Keep those paths together in the source tree. A clone of the release already contains the pack. The renderer displays the opening view once its models are ready and uses built-in geometry for missing or invalid models.
+The standard source release includes 86 GLBs in `packages/assets/models/` and a role index in `packages/assets/manifest.json`. Keep those paths together in the source tree. A clone of the release already contains the pack. The renderer displays the opening view once its models are ready and uses built-in geometry for missing or invalid models.
 
 ## Generate a personal model
 

@@ -27,7 +27,7 @@ export function DocumentReader({ excerpt, diagrams, linkedEvidence, openRange, o
     if (target && target.path !== excerpt.path) sourceLinks.push(target);
     return target ? <button className="kd-doc-link" type="button" key={index} onClick={() => openPath(target)}>{link[2]}</button> : link[2];
   });
-  const lines = excerpt.text.split(/\r?\n/);
+  const lines = (excerpt.display ?? excerpt.text).split(/\r?\n/);
   const blocks: ReactNode[] = [];
   for (let index = 0; index < lines.length;) {
     const line = lines[index];
@@ -58,7 +58,10 @@ export function DocumentReader({ excerpt, diagrams, linkedEvidence, openRange, o
     if (line.includes("|") && tableSeparator.test(lines[index] ?? "")) {
       index += 1;
       const rows: string[][] = [];
-      while (index < lines.length && lines[index].trim().includes("|")) rows.push(cells(lines[index++]));
+      while (index < lines.length && lines[index].trim().includes("|")) {
+        const row = cells(lines[index++]);
+        if (row.some(Boolean)) rows.push(row);
+      }
       blocks.push(<div className="kd-doc-table" key={number} tabIndex={0} role="region" aria-label={`Table at line ${number}`}>
         <table><thead><tr>{cells(line).map((cell, i) => <th key={i} scope="col">{inline(cell)}</th>)}</tr></thead>
           <tbody>{rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{inline(cell)}</td>)}</tr>)}</tbody></table>

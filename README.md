@@ -20,7 +20,7 @@ npm start
 
 Open `http://127.0.0.1:4717` if the browser does not open automatically. Generation uses your existing Claude Code or Codex CLI login, or your Anthropic API key. Choose a provider in **Settings**. Kodyurd stores workspace data under `~/.kodyurd` and serves the app from your computer.
 
-**The 85 bundled GLBs are in `packages/assets/models/`.** The app loads them locally and shows the opening view when its models are ready. Add your own Tripo API key in **Settings** if you want to generate a personal model. [Model guide](docs/ASSETS.md)
+**The 86 bundled GLBs are in `packages/assets/models/`.** The app loads them locally and shows the opening view when its models are ready. Add your own Tripo API key in **Settings** if you want to generate a personal model. [Model guide](docs/ASSETS.md)
 
 ## Try Harbor Desk
 
@@ -29,6 +29,7 @@ Harbor Desk is the included example workspace. It models office reservations and
 ## Explore and share
 
 - **Explore architecture** opens the focused module's diagram. **Diagrams** lists component, behavior and data views that are available for this city.
+- **Edit diagram** corrects a diagram, and **Draw or import a diagram** adds your own from scratch, Mermaid text or a diagrams.net file. Any diagram can be copied as Mermaid or downloaded as `.drawio`.
 - **Replay scenario** opens the playable examples supported by source evidence. **Learn** contains tours, practice and exams.
 - **Docs** and diagram evidence open excerpts in the city or at a validated line in your editor.
 - **Export bundle** saves a static ZIP with the models used by the city. A static HTTP server can serve the extracted city. Review the scene text and model rights before sharing.

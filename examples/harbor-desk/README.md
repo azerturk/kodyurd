@@ -31,4 +31,4 @@ Open [Harbor Desk](http://127.0.0.1:4724) for the UI. The service binds to loopb
 | Local mailbox | [notifications/worker.mjs](notifications/worker.mjs), [persistence/schema.mjs](persistence/schema.mjs) | [Notification lifecycle](docs/notifications.md) |
 | System boundaries | [server.mjs](server.mjs) | [Architecture](docs/architecture.md), [Transactional outbox decision](docs/adr-001-transactional-outbox.md) |
 
-See [Troubleshooting](docs/troubleshooting.md) for common reservation and delivery outcomes. The [HTTP tests](test/http.test.mjs) exercise successful booking, access denial, conflict, and rebooking.
+See [Troubleshooting](docs/troubleshooting.md) for common reservation and delivery outcomes. The [operations runbook](docs/operations.rst) covers settings and the process lifecycle, and [Identities and access](docs/access.adoc) lists the demo identities. The [code map](docs/code-map.md) shows the system context, the service objects and a topic overview. The [HTTP tests](test/http.test.mjs) exercise successful booking, access denial, conflict, and rebooking.

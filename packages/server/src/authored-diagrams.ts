@@ -1,21 +1,16 @@
 import { createHash } from "node:crypto";
-import { SpaceDiagram, type TSpaceDocument, type TSpaceSourceRef } from "@kodyurd/scene-schema";
+import { SpaceDiagram, type TSpaceDocument } from "@kodyurd/scene-schema";
 import { indexMarkdown, type DocSection } from "./analyzer.js";
+import { asMarkdownLines } from "./documents.js";
+import { documentFormat, isDocumentPath } from "./source-paths.js";
 import type { SourceReader } from "./source-evidence.js";
-
-type Diagram = TSpaceDocument["diagrams"][number];
-type Node = Diagram["nodes"][number];
-type Edge = Diagram["edges"][number];
-type Line = { text: string; source: TSpaceSourceRef };
-type DiagramBody = { nodes: Map<string, Node>; edges: Edge[] };
-type NodeSpec = Omit<Node, "source">;
+import { NODE_LIMIT, plain, putEdge, putNode, type Diagram, type DiagramBody, type Edge, type Line, type Node, type NodeSpec, type Parser } from "./authored-kit.js";
+import { c4, classDiagram, gantt, journey, mindmap, timeline } from "./authored-notations.js";
 
 const DOC_LIMIT = 48;
 const DOC_CHARS = 256 * 1024;
 const READ_CHARS = 512 * 1024;
 const DIAGRAM_LIMIT = 12;
-const NODE_LIMIT = 24;
-const EDGE_LIMIT = 48;
 const idPattern = "[A-Za-z_][A-Za-z0-9_-]{0,63}?";
 const message = new RegExp(`^(${idPattern})\\s*(-->>|->>)\\s*(${idPattern})\\s*:\\s*(.+)$`);
 const stateId = `(?:${idPattern}|\\[\\*\\])`;
@@ -27,11 +22,6 @@ const entityField = /^([A-Za-z][A-Za-z0-9_\[\](),?-]{0,59})\s+(\*)?([A-Za-z_][A-
 const endpointCardinality: Record<string, NonNullable<Edge["cardinality"]>["from"]> = {
   "||": "1", "|o": "0..1", "o|": "0..1", "}o": "0..*", "o{": "0..*", "}|": "1..*", "|{": "1..*"
 };
-
-function plain(value: string, max: number): string | undefined {
-  const text = value.trim().replace(/^"([^"]+)"$/, "$1").trim();
-  return text && text.length <= max && !/["<>\\\u0000-\u001f]|&(?:#[\da-fx]+|[a-z]+);/i.test(text) ? text : undefined;
-}
 
 function nodeSpec(token: string): NodeSpec | undefined {
   const item = /^([A-Za-z_][A-Za-z0-9_-]{0,63})(.*)$/.exec(token.trim());
@@ -45,20 +35,6 @@ function nodeSpec(token: string): NodeSpec | undefined {
   const label = plain(store ? shape.slice(2, -2) : shape.slice(1, -1), 80);
   if (!label || /[\[\]{}|]/.test(label)) return undefined;
   return { id, label, hint: store ? "store" : decision ? "decision" : undefined, icon: store ? "database" : undefined };
-}
-
-function putNode(body: DiagramBody, node: NodeSpec, source: TSpaceSourceRef): boolean {
-  const previous = body.nodes.get(node.id);
-  if (previous && node.label !== node.id && previous.label !== node.id && previous.label !== node.label) return false;
-  const addsLabel = previous?.label === node.id && node.label !== node.id;
-  const addsHint = !previous?.hint && node.hint && previous?.label === node.label;
-  if (!previous || addsLabel || addsHint) body.nodes.set(node.id, { ...node, group: node.group ?? previous?.group, source });
-  return body.nodes.size <= NODE_LIMIT;
-}
-
-function putEdge(body: DiagramBody, edge: Edge): boolean {
-  body.edges.push({ ...edge, id: `e-${body.edges.length + 1}` });
-  return body.edges.length <= EDGE_LIMIT;
 }
 
 function flowchart(lines: Line[], body: DiagramBody): boolean {
@@ -194,6 +170,20 @@ function entityRelationship(lines: Line[], body: DiagramBody): boolean {
   return !fields;
 }
 
+// Every notation the importer reads; `standsAlone` ones are complete without a relationship.
+const notations: { match: RegExp; kind: Diagram["kind"]; parse: Parser; standsAlone?: boolean }[] = [
+  { match: /^(?:flowchart|graph) (?:TB|TD|BT|RL|LR)$/, kind: "graph", parse: flowchart },
+  { match: /^sequenceDiagram$/, kind: "sequence", parse: sequence },
+  { match: /^stateDiagram(?:-v2)?$/, kind: "state", parse: stateMachine },
+  { match: /^erDiagram$/, kind: "erd", parse: entityRelationship, standsAlone: true },
+  { match: /^classDiagram(?:-v2)?$/, kind: "class", parse: classDiagram, standsAlone: true },
+  { match: /^C4(?:Context|Container|Component|Dynamic|Deployment)$/, kind: "graph", parse: c4 },
+  { match: /^gantt$/, kind: "timeline", parse: gantt, standsAlone: true },
+  { match: /^journey$/, kind: "timeline", parse: journey, standsAlone: true },
+  { match: /^timeline$/, kind: "timeline", parse: timeline, standsAlone: true },
+  { match: /^mindmap$/, kind: "mindmap", parse: mindmap }
+];
+
 function parseBlock(path: string, owner: string, doc: string[], block: DocSection): Diagram | undefined {
   const { startLine, endLine } = block;
   if (endLine - startLine > 96) return undefined;
@@ -201,17 +191,14 @@ function parseBlock(path: string, owner: string, doc: string[], block: DocSectio
   if (raw.some((line) => line.length > 256)) return undefined;
   const lines = raw.map((line, index) => {
     const number = startLine + index + 1;
-    return { text: line.trim(), source: { path, startLine: number, endLine: number } };
+    return { text: line.trim(), indent: line.length - line.trimStart().length, source: { path, startLine: number, endLine: number } };
   }).filter(({ text }) => text && !/^%%(?!\{)/.test(text));
-  const type = lines.shift()?.text;
-  const kind = /^(flowchart|graph) (TB|TD|BT|RL|LR)$/.test(type ?? "") ? "graph"
-    : type === "sequenceDiagram" ? "sequence"
-      : type === "stateDiagram" || type === "stateDiagram-v2" ? "state"
-        : type === "erDiagram" ? "erd" : undefined;
-  if (!kind) return undefined;
-  const parse = kind === "graph" ? flowchart : kind === "sequence" ? sequence : kind === "state" ? stateMachine : entityRelationship;
+  const type = lines.shift()?.text ?? "";
+  const notation = notations.find(({ match }) => match.test(type));
+  if (!notation) return undefined;
+  const { kind } = notation;
   const body: DiagramBody = { nodes: new Map(), edges: [] };
-  if (!parse(lines, body) || kind !== "erd" && !body.edges.length) return undefined;
+  if (!notation.parse(lines, body) || !notation.standsAlone && !body.edges.length) return undefined;
   const id = `authored-live-${createHash("sha256").update(JSON.stringify([path, startLine, raw])).digest("hex").slice(0, 24)}`;
   const note = "Imported from the current workspace document."
     + (kind === "sequence" && body.edges.some(({ guard }) => guard) ? " Alternative messages retain their conditions and authored order." : "");
@@ -221,12 +208,27 @@ function parseBlock(path: string, owner: string, doc: string[], block: DocSectio
   return result.success ? result.data : undefined;
 }
 
-/** Add only bounded, fully supported diagrams from Markdown paths recorded in the saved city. */
+/** Reads pasted Mermaid text with the same parsers. A pasted diagram has no workspace source to cite. */
+export function parseMermaidText(text: string, owner: string, title: string): Diagram | undefined {
+  const body = text.replace(/\r\n?/g, "\n").split("\n").filter((line) => !/^\s*```/.test(line));
+  while (body.length && !body[0].trim()) body.shift();
+  const lines = ["```mermaid", ...body, "```"];
+  const parsed = parseBlock("pasted.md", owner, lines, { kind: "mermaid", startLine: 1, endLine: lines.length, title });
+  if (!parsed) return undefined;
+  const result = SpaceDiagram.safeParse({
+    ...parsed, id: "import", note: undefined, source: undefined, origin: "user",
+    nodes: parsed.nodes.map(({ source: _, fields, ...node }) => ({ ...node, fields: fields?.map(({ source: __, ...field }) => field) })),
+    edges: parsed.edges.map(({ source: _, ...edge }) => edge)
+  });
+  return result.success ? result.data : undefined;
+}
+
+/** Add only bounded, fully supported diagrams from document paths recorded in the saved city. */
 export async function readAuthoredDiagrams(space: TSpaceDocument, read: SourceReader): Promise<Diagram[]> {
   const diagrams: Diagram[] = [];
   const limit = Math.min(DIAGRAM_LIMIT, 120 - space.diagrams.length);
   if (limit <= 0) return diagrams;
-  const paths = [...new Set(space.meta.coverage.map(({ doc }) => doc.replaceAll("\\", "/")).filter((doc) => /\.md$/i.test(doc)))];
+  const paths = [...new Set(space.meta.coverage.map(({ doc }) => doc.replaceAll("\\", "/")).filter(isDocumentPath))];
   const ids = new Set(space.diagrams.map(({ id }) => id));
   let chars = 0;
   for (const path of paths.slice(0, DOC_LIMIT)) {
@@ -238,9 +240,11 @@ export async function readAuthoredDiagrams(space: TSpaceDocument, read: SourceRe
     if (text.length > DOC_CHARS) continue;
     const owner = space.city.buildings.filter(({ moduleRef }) => path.startsWith(`${moduleRef}/`))
       .sort((a, b) => b.moduleRef.length - a.moduleRef.length)[0]?.id ?? "city";
-    for (const block of indexMarkdown(text).sections) {
+    // Other formats are read in Markdown terms; line numbers stay those of the file.
+    const markdown = asMarkdownLines(lines, documentFormat(path));
+    for (const block of indexMarkdown(markdown.join("\n")).sections) {
       if (block.kind !== "mermaid") continue;
-      const diagram = parseBlock(path, owner, lines, block);
+      const diagram = parseBlock(path, owner, markdown, block);
       if (!diagram || ids.has(diagram.id)) continue;
       const hasSaved = space.diagrams.some(({ source, kind }) => kind === diagram.kind && source?.path.replaceAll("\\", "/") === path
         && source.startLine !== undefined && source.startLine >= block.startLine && (source.endLine ?? source.startLine) <= block.endLine);

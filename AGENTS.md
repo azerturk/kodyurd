@@ -90,9 +90,10 @@ Chat instructions from the user override this guide.
   `layout-types.ts`). **Security boundary.**
 - `packages/server` — Fastify on 127.0.0.1:4717: `analyzer.ts` (v2), `space-pipeline.ts`
   (P1/P2 + sanitize), `space-layout/` (deterministic geometry), `prompts/` (the generation
-  playbook), `jobs.ts` (the space job: parallel P2 pool + content-hash cache ⇒ incremental
-  re-builds), `tripo.ts` (personal overlay, receipt law), `routes.ts`, `export.ts` (static
-  city bundle). SQLite via `node:sqlite`.
+  playbook), `jobs.ts` (the space job: focus and brief-driven lessons + content-hash cache ⇒
+  incremental re-builds), `saved-cities.ts` (one city kept per brief), `diagram-edits.ts` (diagrams
+  the user corrected, imported or drew), `tripo.ts` (personal overlay, receipt law), `routes.ts`,
+  `export.ts` (static city bundle). SQLite via `node:sqlite`.
 - `packages/ui` — React + Tailwind + Vite: `viewer/space-engine.ts` + `SpaceViewer.tsx`
   (the shared viewer), `screens/*`, `export-main.tsx` (offline city-bundle entry).
 - `packages/cli` — the `kodyurd` bin.

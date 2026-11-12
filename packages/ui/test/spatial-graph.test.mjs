@@ -125,3 +125,24 @@ test("a sequence retains actor roles and distinguishes calls, replies and active
   assert(call.pieces[0].render.material === material("#2f4b55"), "the initial message should keep its call paint");
   assert(reply.pieces[0].render.material === material("#198b7c"), "the active reply should be teal");
 });
+
+test("a layer stack rises in terraces and a timeline links its nodes in order", (t) => {
+  const three = [{ id: "a", label: "Storage" }, { id: "b", label: "Service" }, { id: "c", label: "Interface" }];
+  // The server lays a stack out bottom-up: the first node has the largest y.
+  const stackLayout = { width: 300, height: 260, nodes: three.map(({ id }, i) => ({ id, x: 36, y: 36 + (2 - i) * 72, w: 228, h: 60 })) };
+  const stack = spatialDiagram({ kind: "stack", nodes: three, edges: [{ from: "a", to: "b" }] }, stackLayout);
+  assert.deepEqual(stack.nodes.map(({ rise }) => rise), [0, 0.36, 0.72]);
+  assert.ok(stack.nodes[0].z > stack.nodes[1].z && stack.nodes[1].z > stack.nodes[2].z, "the bottom layer stands nearest");
+  assert.deepEqual(stack.edges, []);
+
+  const lineLayout = { width: 700, height: 150, nodes: three.map(({ id }, i) => ({ id, x: 36 + i * 220, y: 60, w: 160, h: 60 })) };
+  const timeline = spatialDiagram({ kind: "timeline", nodes: three, edges: [] }, lineLayout);
+  assert.deepEqual(timeline.edges.map(({ from, to }) => [from, to]), [["a", "b"], ["b", "c"]]);
+  const authored = spatialDiagram({ kind: "timeline", nodes: three, edges: [{ id: "skip", from: "a", to: "c" }] }, lineLayout);
+  assert.deepEqual(authored.edges.map(({ id }) => id), ["skip"]);
+
+  const { root, device, part, material } = stage(t);
+  const view = renderSpatialGraph(root, stack.nodes, stack.edges, part, material, () => undefined, "stack", device);
+  assert.equal(view.linkShapes.length, 0);
+  assert.ok(stack.nodes[2].visualHeight - stack.nodes[0].visualHeight > 0.7, "a higher layer has a higher top face");
+});

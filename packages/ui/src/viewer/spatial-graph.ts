@@ -13,6 +13,8 @@ export interface SpatialNode extends Position {
   width: number;
   depth: number;
   visualHeight?: number;
+  /** Height of the pedestal under the node: a layer stack rises like terraces. */
+  rise?: number;
   icon?: string;
   kind?: string;
   group?: string;
@@ -77,7 +79,7 @@ export function spatialDiagram(diagram: SpaceDiagram, layout: DiagramLayout): { 
       id: node.id,
       label: node.label,
       width: position.w * scale * 0.90,
-      depth: diagram.kind === "erd" ? position.h * scale * 0.90 : Math.min(1.52, position.h * scale * 0.99),
+      depth: diagram.kind === "erd" || diagram.kind === "class" ? position.h * scale * 0.90 : Math.min(1.52, position.h * scale * 0.99),
       x: (position.x + position.w / 2 - layout.width / 2) * scale,
       z: (position.y + position.h / 2 - layout.height / 2) * scale * (diagram.kind === "matrix" ? 1.55 : 1),
       icon: node.icon,
@@ -92,6 +94,11 @@ export function spatialDiagram(diagram: SpaceDiagram, layout: DiagramLayout): { 
     const members = groups.get(group) ?? [];
     members.push(node);
     groups.set(group, members);
+  }
+  if (diagram.kind === "stack") {
+    // The first node is the bottom layer; each later layer stands one step higher behind it.
+    const order = new Map(diagram.nodes.map((node, index) => [node.id, index]));
+    for (const node of nodes as SpatialNode[]) node.rise = (order.get(node.id) ?? 0) * 0.36;
   }
   const compactGroups = diagram.kind === "graph" && nodes.length >= 4 && nodes.length <= 8 && groups.size <= 4;
   if (groups.size > 1 && groups.size <= 6) {
@@ -113,9 +120,12 @@ export function spatialDiagram(diagram: SpaceDiagram, layout: DiagramLayout): { 
     }
     for (const node of nodes) node.x -= (x - 2.6) / 2;
   }
+  // Layers touch rather than link; a timeline without authored links reads in node order.
+  const chain = diagram.kind === "timeline" && !diagram.edges.length
+    ? nodes.slice(1).map((node, index) => ({ id: `next-${index + 1}`, from: nodes[index].id, to: node.id, source: node.source })) : [];
   return {
     nodes,
-    edges: diagram.edges.map((edge, index) => ({
+    edges: diagram.kind === "stack" ? [] : chain.length ? chain : diagram.edges.map((edge, index) => ({
       id: edge.id ?? String(index),
       from: edge.from,
       to: edge.to,
@@ -471,13 +481,15 @@ export function renderSpatialGraph(
     tile.setLocalPosition(node.x, 0, node.z);
     root.addChild(tile);
     const onGroup = node.group !== undefined && groups.has(node.group);
-    const baseY = onGroup ? 0.103 : 0.002;
+    const rise = node.rise ?? 0;
+    if (rise > 0) slab(tile, node.width * 1.03, rise, node.depth * 1.06, 0, rise / 2, 0, footMaterial);
+    const baseY = (onGroup ? 0.103 : 0.002) + rise;
     if (addShadow) addShadow(tile, 0.21, 0.18, node.width * 1.48, node.depth * 1.83, baseY + 0.004);
     else slab(tile, node.width * 1.075, 0.024, node.depth * 1.12, 0.035, baseY + 0.012, 0.05, contactMaterial);
     const foot = slab(tile, node.width * 1.055, 0.29, node.depth * 1.08, 0, baseY + 0.151, 0, footMaterial);
     const face = slab(tile, node.width, 0.82, node.depth, 0, baseY + 0.66, 0, normal);
     node.visualHeight = baseY + 1.07;
-    if (diagramKind !== "erd" && (role || node.icon)) {
+    if (diagramKind !== "erd" && diagramKind !== "class" && (role || node.icon)) {
       const marker = new pc.Entity("diagram-role");
       const span = Math.min(1.22, node.depth * 0.86, node.width * 0.73);
       const glyphScale = Math.min(0.53, node.depth * 0.37, node.width * 0.23);

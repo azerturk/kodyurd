@@ -68,6 +68,19 @@ Produce the CITY-LEVEL part of a SpaceDocument v0.2:
    fragile or floating parts. Omit the offer if a fitting role is unclear.
 8. **Navigation skeleton.** menu tree (Map / Buildings / Flows / Docs) and a
    searchIndex entry per building and per system flow.
+9. **Lessons.** List the buildings the brief asks the learner to understand,
+   most important first, as `lessons`. Each entry names one building id and a
+   `goal`: the part of the brief that building answers, kept in the learner's
+   own words for the outcomes, counts and cases they ask for. Add `views` only
+   when the brief asks for that building's message order ("sequence"), its
+   lifecycle or statuses ("state"), its rules by role or condition
+   ("matrix"), its stored records and their relationships ("erd"), its types
+   and how they relate ("class"), an outline of its topics ("mindmap") or who
+   and what it works with from outside ("context"). At most four views per
+   building. Include a building only when the brief is about it. For a brief
+   that names no module, flow or topic, choose the two to four buildings that
+   best explain the system. Leave `lessons` empty when the brief is empty. The
+   system builds the first ten and offers the rest, so order matters.
 
 ## Output
 
@@ -80,13 +93,14 @@ ONE JSON object:
   "diagrams": [...],
   "interiorBudget": { "<buildingId>": "full" | "catalog" | "none" },
   "focusBuilding": "<buildingId>",
+  "lessons": [{ "building": "<buildingId>", "goal": "...", "views": ["sequence"|"state"|"matrix"|"erd"|"class"|"mindmap"|"context"] }],
   "offers": [{ "class": "landmark"|"centerpiece", "building": "<id>", "prompt": "..." }],
   "navigation": { "menu": [...], "searchIndex": [...] }
 }
 ```
 
 STRICT SHAPE: your reply's top-level keys are EXACTLY `city` (holding
-`districts` and `buildings`), `flows`, `diagrams`, `interiorBudget`, optional `focusBuilding`, `offers`,
+`districts` and `buildings`), `flows`, `diagrams`, `interiorBudget`, optional `focusBuilding`, `lessons`, `offers`,
 `navigation` — nothing else. Do NOT emit a full SpaceDocument here (no
 `version`, no `meta`, no `interiors`, no `tour`), do not wrap the object, and
 do not put `districts`/`buildings` at the top level.

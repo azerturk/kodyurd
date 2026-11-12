@@ -424,3 +424,22 @@ button.kd-space-top:hover, button.kd-space-top[aria-pressed="true"] { background
     max-width: calc(100% - 1.3rem);
   }
 }
+
+/* Diagram editor: the same card as Explain, with plain form controls. */
+.kd-diagram-editor { overflow-y: auto; }
+.kd-editor-field { display: grid; gap: .2rem; margin-block: .45rem; color: var(--learn-muted); font-size: .72rem; font-weight: 700; }
+.kd-editor-row { display: flex; align-items: center; gap: .3rem; }
+.kd-editor-row > .kd-editor-field { flex: 1 1 0; min-width: 0; }
+.kd-diagram-editor :is(input, select, textarea), .kd-diagram-create textarea {
+  min-width: 0; width: 100%; border: 1px solid #d8caa6; border-radius: .45rem; background: #fffdf6; color: #1f2b27;
+  padding: .32rem .45rem; font: inherit; font-size: calc(.8rem * var(--learn-size, 1)); font-weight: 500;
+}
+.kd-diagram-editor textarea, .kd-diagram-create textarea { font-family: ui-monospace, monospace; resize: vertical; }
+.kd-editor-row > :is(input, select) { flex: 1 1 0; }
+.kd-editor-list { display: grid; gap: .5rem; margin: .4rem 0 .5rem; padding: 0; list-style: none; }
+.kd-editor-list > li { display: grid; gap: .28rem; border-top: 1px solid #e6dcc0; padding-top: .45rem; }
+.kd-editor-message { margin-block: .5rem; color: var(--learn-accent-deep); font-weight: 650; }
+.kd-editor-save { border-color: var(--learn-accent); background: #e4f2e7; }
+.kd-editor-file { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.kd-editor-file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.kd-diagram-create { margin-bottom: .8rem; }

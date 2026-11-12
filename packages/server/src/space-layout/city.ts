@@ -36,8 +36,11 @@ function footprint(b: TSpaceDocument["city"]["buildings"][number]): { w: number;
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
+// A focused city up to this size gathers every building around one court; larger ones line an avenue.
+const CAMPUS_BUILDINGS = 24;
+
 export function usesCampusLayout(space: TSpaceDocument): boolean {
-  return space.city.buildings.length <= 12 && space.city.districts.length <= 6 &&
+  return space.city.buildings.length <= CAMPUS_BUILDINGS && space.city.districts.length <= 6 &&
     space.city.buildings.some((building) => building.id === space.presentation?.start?.building);
 }
 
@@ -85,14 +88,15 @@ function layoutCampus(space: TSpaceDocument, focus: TSpaceDocument["city"]["buil
         h: round1(primary ? Math.max(10.8, Math.min(13.5, size.h)) : Math.max(6.2, Math.min(10.2, size.h)))
       } };
     });
-    const cols = Math.min(3, cells.length);
+    // A crowded wing widens to four columns so its last row stays near the court.
+    const cols = Math.min(cells.length > 6 ? 4 : 3, cells.length);
     const cellW = Math.max(...cells.map(({ size }) => size.w)) + gap;
     const cellD = Math.max(...cells.map(({ size }) => size.d)) + gap;
     const width = cols * cellW;
     const facing = south ? -1 : 1;
     const front = south ? 26 : 0;
     const x = side === -1 ? anchorX - width : side === 1 ? anchorX : anchorX - width / 2;
-    const columnOrder = cols === 3 ? [1, 0, 2] : cols === 2 && side === -1 ? [1, 0] : [0, 1];
+    const columnOrder = cols === 4 ? [1, 2, 0, 3] : cols === 3 ? [1, 0, 2] : cols === 2 && side === -1 ? [1, 0] : [0, 1];
     const wingBuildings = cells.map((cell, i) => {
       const col = columnOrder[i % cols];
       const row = Math.floor(i / cols);

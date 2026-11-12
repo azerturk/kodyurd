@@ -7,6 +7,7 @@ import archiver from "archiver";
 import { overlaysPath, projectDir, spacePath, type ProjectRow } from "./jobs.js";
 import { overlayBuilding, type OverlayRecord } from "./overlay-records.js";
 import { readAuthoredDiagrams } from "./authored-diagrams.js";
+import { applyDiagramEdits, readDiagramEdits } from "./diagram-edits.js";
 import { buildSpaceLayout, layoutDiagram, refreshCampus, refreshCompactDiagrams, refreshInteriors } from "./space-layout/index.js";
 import { cityTitle } from "./space-pipeline.js";
 import { tripoCacheGlb } from "./tripo.js";
@@ -64,6 +65,7 @@ interface AnySpaceDoc {
   presentation?: { start?: { building?: string } };
   diagrams?: { nodes: { icon?: string }[] }[];
   interiors?: unknown[];
+  assessment?: { questions?: unknown[] };
 }
 
 interface AnySpaceLayout {
@@ -74,7 +76,7 @@ interface AnySpaceLayout {
   };
   interiors?: Record<
     string,
-    { floors?: { pedestals?: { icon?: string }[] }[] }
+    { floors?: { pedestals?: { icon?: string }[] }[]; corridors?: { gates?: unknown[] }[] }
   >;
 }
 
@@ -88,7 +90,7 @@ const CHARACTER_ROLES = [
 ];
 
 const CITY_FIXED_ROLES = ["gate-arch", "obelisk-marker", "door-frame"];
-const INTERIOR_ROLES = ["reception-desk", "lobby-plant", "sofa", "elevator-doors", "pedestal"];
+const INTERIOR_ROLES = ["reception-desk", "lobby-plant", "sofa", "elevator-doors", "pedestal", "bookshelf", "table-long", "chair"];
 
 /** Every pack role this space's geometry can mount (mirrors space-engine.ts). */
 export function collectPackRoles(space: AnySpaceDoc, layout: AnySpaceLayout): string[] {
@@ -117,7 +119,11 @@ export function collectPackRoles(space: AnySpaceDoc, layout: AnySpaceLayout): st
   const interiors = layout.interiors ?? {};
   if (Object.keys(interiors).length > 0) {
     for (const role of INTERIOR_ROLES) roles.add(role);
+    roles.add("lesson-banner");
+    if (space.assessment?.questions?.length) roles.add("trophy");
     for (const il of Object.values(interiors)) {
+      if (il.floors?.length) for (const role of ["floor-sign", "info-stand"]) roles.add(role);
+      if (il.corridors?.some((corridor) => corridor.gates?.length)) roles.add("gate-checkpoint");
       for (const floor of il.floors ?? []) {
         for (const ped of floor.pedestals ?? []) {
           if (ped.icon) roles.add(`icon-${ped.icon}`);
@@ -134,9 +140,10 @@ export async function readSavedSpace(
   projectId: string,
   sourceDir?: string
 ): Promise<{ space: TSpaceDocument; layout: SpaceLayout }> {
-  return readSavedSpaceFile(spacePath(dataDir, projectId), sourceDir);
+  return applyDiagramEdits(await readSavedSpaceFile(spacePath(dataDir, projectId), sourceDir), await readDiagramEdits(dataDir, projectId));
 }
 
+/** The generated city as saved, with diagrams imported from its documents but without the user's edits. */
 export async function readSavedSpaceFile(file: string, sourceDir?: string): Promise<{ space: TSpaceDocument; layout: SpaceLayout }> {
   const raw: unknown = JSON.parse(await fs.readFile(file, "utf8"));
   const saved = typeof raw === "object" && raw !== null && "space" in raw

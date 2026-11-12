@@ -2,6 +2,9 @@ import type { DocExcerpt } from "../api";
 import type { SpaceAssessmentQuestion, SpaceDiagram, SpaceFlow, SpaceSource } from "../space-types";
 import type { ReplayTrace } from "./flow-replay";
 
+/** Paths the reader opens as documents. Keep in step with the server's `source-paths.ts`. */
+export const isDocumentPath = (path: string): boolean => /\.(?:md|markdown|mdx|rst|adoc|asciidoc)$/i.test(path);
+
 export interface DocumentTarget {
   path: string;
   anchor?: string;
@@ -12,7 +15,9 @@ export interface DocumentTarget {
 export function diagramForDocumentFence(diagrams: SpaceDiagram[], path: string, start: number, end: number, lines: string[]): SpaceDiagram | undefined {
   const syntax = lines.find((line) => line.trim() && !line.trimStart().startsWith("%%"))?.trim() ?? "";
   const kind = /^sequenceDiagram\b/i.test(syntax) ? "sequence" : /^stateDiagram\b/i.test(syntax) ? "state"
-    : /^erDiagram\b/i.test(syntax) ? "erd" : /^(?:flowchart|graph|C4Context|C4Container|C4Component)\b/i.test(syntax) ? "graph" : undefined;
+    : /^erDiagram\b/i.test(syntax) ? "erd" : /^classDiagram\b/i.test(syntax) ? "class" : /^mindmap\b/i.test(syntax) ? "mindmap"
+      : /^(?:gantt|journey|timeline)\b/i.test(syntax) ? "timeline"
+        : /^(?:flowchart|graph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i.test(syntax) ? "graph" : undefined;
   if (!kind) return undefined;
   const coversFence = (source?: SpaceSource): boolean => Boolean(source?.path === path && source.startLine !== undefined &&
     source.startLine >= start - 2 && source.startLine <= end && (source.endLine ?? source.startLine) >= start);
@@ -50,7 +55,7 @@ export function documentLink(current: string, rawTarget: string): DocumentTarget
       const to = lines[2] ? Number(lines[2]) : from;
       return to >= from ? { path: resolvedPath, from, to } : null;
     }
-    return anchor && /\.md$/i.test(resolvedPath) ? { path: resolvedPath, anchor } : { path: resolvedPath };
+    return anchor && isDocumentPath(resolvedPath) ? { path: resolvedPath, anchor } : { path: resolvedPath };
   } catch {
     return null;
   }
@@ -169,7 +174,7 @@ export function evidenceViaSourceLinks(
   const known = new Set(direct.map(readingEvidenceKey));
   const found: ReadingEvidence[] = [];
   for (const target of [...targets].sort((a, b) => Number(Boolean(b.from)) - Number(Boolean(a.from)))) {
-    if (/\.md$/i.test(target.path)) continue;
+    if (isDocumentPath(target.path)) continue;
     const entries = index.get(target.path);
     if (!entries) continue;
     const { from, to } = target;

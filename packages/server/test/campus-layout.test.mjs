@@ -56,11 +56,28 @@ test("saved focused geometry upgrades independently of rooms and larger city lay
   assert.equal(upgraded.interiors, legacy.interiors);
   assert.equal(refreshCampus(space, upgraded), upgraded);
 
+  // Up to twenty-four buildings still gather around the court; a crowded wing takes four columns.
+  const wide = sample();
+  for (let i = 0; i < 19; i++) wide.city.buildings.push(building(`other-${i}`, i % 2 ? "shared" : "workflow"));
+  const court = layoutCity(wide);
+  assert.ok(court.campus);
+  assert.equal(court.buildings.length, 24);
+  for (const district of ["workflow", "shared"]) {
+    const members = new Set(wide.city.buildings.filter((item) => item.district === district).map(({ id }) => id));
+    const rows = new Set(court.buildings.filter(({ id }) => members.has(id)).map(({ pos, size }) => Math.round((pos.z + size.d / 2) * 10)));
+    assert.ok(rows.size <= 4, `${district} is at most four rows deep`);
+  }
+  for (const [i, first] of court.buildings.entries()) for (const second of court.buildings.slice(i + 1)) {
+    const apartX = Math.abs(first.pos.x - second.pos.x) >= (first.size.w + second.size.w) / 2 + 2;
+    const apartZ = Math.abs(first.pos.z - second.pos.z) >= (first.size.d + second.size.d) / 2 + 2;
+    assert.ok(apartX || apartZ, `${first.id} and ${second.id} keep a lane between them`);
+  }
+
   const large = sample();
-  for (let i = 0; i < 12; i++) large.city.buildings.push(building(`other-${i}`, "shared"));
+  for (let i = 0; i < 20; i++) large.city.buildings.push(building(`other-${i}`, "shared"));
   const city = layoutCity(large);
   assert.equal(city.campus, undefined);
-  assert.equal(city.buildings.length, 17);
+  assert.equal(city.buildings.length, 25);
   assert.ok(city.roads.length > 2);
 });
 

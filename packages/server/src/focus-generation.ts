@@ -3,10 +3,10 @@ import { replayTargetIssue, type TSpaceDocument } from "@kodyurd/scene-schema";
 import { AgentError, extractJsonObject, extractResultText, type AgentRunOptions } from "./agents.js";
 import type { EvidenceExcerpt, SourceReader } from "./source-evidence.js";
 import { acceptDiagramClaims, authoredDecisionQuotes, compactLessonEvidence, guideEvidenceCovers, requestedDecisionEvidence, verifiedSourceRef, type AuthoredDecisionQuote } from "./source-evidence.js";
-import { BuildingPass, buildBuildingPrompt, focusedEvidenceRows, normalizeBuildingPass, type BuildingPromptInput, type TBuildingPass } from "./space-pipeline.js";
+import { BuildingPass, buildBuildingPrompt, focusedEvidenceRows, LESSON_VIEWS, normalizeBuildingPass, type BuildingPromptInput, type TBuildingPass } from "./space-pipeline.js";
 import type { SceneReference } from "./scene-reference.js";
 
-export const focusKinds = ["map", "scenario", "sequence", "state", "matrix"] as const;
+export const focusKinds = ["map", "scenario", ...LESSON_VIEWS] as const;
 export type FocusKind = typeof focusKinds[number];
 export type FocusDeliverableId = `focus-${FocusKind}` | `lesson-${string}-${FocusKind}`;
 
@@ -22,15 +22,31 @@ export interface FocusDeliverable {
 export const focusId = (kind: FocusKind): FocusDeliverableId => `focus-${kind}`;
 
 const deliverableTitle: Record<FocusKind, string> = {
-  map: "Component map", scenario: "Playable scenario", sequence: "Sequence diagram", state: "State machine", matrix: "Decision table"
+  map: "Component map", scenario: "Playable scenario", sequence: "Sequence diagram", state: "State machine", matrix: "Decision table",
+  erd: "Data model", class: "Class diagram", mindmap: "Mind map", context: "System context"
 };
 
-export function newFocusDeliverables(brief = "", documentationOnly = false, companion?: { moduleRef: string; title: string }): FocusDeliverable[] {
+/** Wording in a brief that asks for a view outright, in the languages the brief rules already read. */
+const requestedView: Record<typeof LESSON_VIEWS[number], RegExp> = {
+  sequence: /\b(?:sequence diagrams?|message sequences?|call sequences?|interaction diagrams?)\b|ardıcıllı|secuencia|последовательност/,
+  state: /\b(?:state (?:machines?|diagrams?)|(?:status|lifecycle) diagrams?)\b|status diaqram|vəziyyət (?:maşın|diaqram)|máquina de estados|машин[ауы] состояни/,
+  matrix: /\b(?:decision (?:tables?|matri(?:x|ces))|(?:condition|rule) tables?)\b|qərar cədvəl|tabla de decisi|таблиц[ауы] решени/,
+  erd: /\b(?:er diagrams?|erds?|entity[- ]relationship (?:diagrams?|models?)|data models?|database schemas?)\b|verilənlər model|məlumat model|modelo de datos|модел[ьи] данных/,
+  class: /\bclass diagrams?\b|sinif diaqram|diagrama de clases|диаграмм[ауы] классов/,
+  mindmap: /\bmind ?maps?\b|ağıl xəritə|zehin xəritə|mapa mental|интеллект-карт/,
+  context: /\b(?:c4 (?:diagrams?|models?|context)|(?:system )?context diagrams?|container diagrams?|deployment (?:diagrams?|views?))\b|kontekst diaqram|diagrama de contexto|диаграмм[ауы] контекста/
+};
+
+export function newFocusDeliverables(brief = "", documentationOnly = false, companion?: { moduleRef: string; title: string },
+  views: readonly FocusKind[] = [], elsewhere: readonly FocusKind[] = []): FocusDeliverable[] {
   const requested: FocusKind[] = documentationOnly || wantsDiagramLesson(brief) ? ["map"] : ["map", "scenario"];
   const text = brief.normalize("NFKC").toLowerCase();
-  if (/\b(?:sequence diagrams?|message sequences?|call sequences?|interaction diagrams?)\b|ardıcıllı|secuencia|последовательност/.test(text)) requested.push("sequence");
-  if (/\b(?:state (?:machines?|diagrams?)|(?:status|lifecycle) diagrams?)\b|status diaqram|vəziyyət (?:maşın|diaqram)|máquina de estados|машин[ауы] состояни/.test(text)) requested.push("state");
-  if (/\b(?:decision (?:tables?|matri(?:x|ces))|(?:condition|rule) tables?)\b|qərar cədvəl|tabla de decisi|таблиц[ауы] решени/.test(text)) requested.push("matrix");
+  // A view the brief names is drawn here unless the plan placed it in another lesson.
+  for (const view of LESSON_VIEWS) if (requestedView[view].test(text) && !elsewhere.includes(view)) requested.push(view);
+  // Views the city plan read out of the brief join the ones its wording names outright.
+  for (const view of views) {
+    if (view !== "map" && view !== "scenario" && !requested.includes(view)) requested.push(view);
+  }
   const scope = companion && createHash("sha256").update(companion.moduleRef).digest("hex").slice(0, 12);
   return requested.map((kind) => ({
     id: scope ? `lesson-${scope}-${kind}` : focusId(kind), kind,
@@ -161,7 +177,7 @@ export function focusIssues(pass: Pick<TBuildingPass, "flows" | "diagrams">, bui
   const minimum = requestedScenarioMinimum(brief);
   const flow = pass.flows.find((item) => item.scope === `module:${building}` && sourcedScenario(item) && distinctScenarios(item) >= minimum);
   const missing = flow ? missingScenarioOutcomes(flow, brief) : [];
-  const map = pass.diagrams.find((item) => (item.owner === building || item.owner.startsWith(`${building}:`)) && item.kind === "graph" && item.edges.length > 0 &&
+  const map = pass.diagrams.find((item) => (item.owner === building || item.owner.startsWith(`${building}:`)) && item.kind === "graph" && !item.id.startsWith("kc-context-") && item.edges.length > 0 &&
     [...item.nodes, ...item.edges].every((element) => element.source?.startLine !== undefined));
   const needsClaims = map && expectsExplanation(brief) && !map.claims?.some(({ kind }) =>
     kind === "guard" || kind === "invariant" || kind === "decision" || kind === "disagreement");
@@ -195,10 +211,21 @@ async function acceptFocusPass(
 ): Promise<TBuildingPass> {
   const normalized = { ...pass, interior: undefined, coverage: [], tour: [], searchIndex: [] };
   const scope = `module:${building}`;
-  normalized.flows = kind === "scenario" ? pass.flows.filter((flow) => flow.scope === scope).slice(0, 1) : [];
+  // A lone flow that names no module belongs to the building this deliverable was asked for.
+  const scoped = pass.flows.filter((flow) => flow.scope === scope);
+  const assigned = scoped.length || pass.flows.length !== 1 || pass.flows[0].scope !== "system" ? scoped : [{ ...pass.flows[0], scope }];
+  normalized.flows = kind === "scenario" ? assigned.slice(0, 1) : [];
   const matchesKind = (diagram: TBuildingPass["diagrams"][number]): boolean =>
-    kind === "map" ? diagram.kind === "graph" : kind === "scenario" ? diagram.kind === "state" || diagram.kind === "sequence" : diagram.kind === kind;
+    kind === "map" || kind === "context" ? diagram.kind === "graph"
+      : kind === "scenario" ? diagram.kind === "state" || diagram.kind === "sequence" : diagram.kind === kind;
   normalized.diagrams = pass.diagrams.filter((diagram) => diagram.owner === building && matchesKind(diagram)).slice(0, 1);
+  if (kind === "mindmap") {
+    // A branch is evidenced by the topic it leads to.
+    for (const diagram of normalized.diagrams) {
+      const topics = new Map(diagram.nodes.map((node) => [node.id, node.source]));
+      for (const edge of diagram.edges) edge.source ??= topics.get(edge.to);
+    }
+  }
   const points = normalized.flows.flatMap((flow) => [flow, ...flow.path, ...(flow.branches ?? []).flatMap((branch) => branch.path)]);
   const diagrams = normalized.diagrams.flatMap((diagram) => [diagram, ...diagram.nodes, ...diagram.edges]);
   let omitted = 0;
@@ -261,6 +288,10 @@ async function acceptFocusPass(
       throw new AgentError("DELIVERABLE_INCOMPLETE", `Component map counts (parsed diagrams ${pass.diagrams.length}, scoped graphs ${normalized.diagrams.length}, nodes ${map?.nodes.length ?? 0}, edges ${map?.edges.length ?? 0}). Missing or invalid exact source ranges (nodes ${map?.nodes.filter((node) => !node.source?.startLine).length ?? 0}, edges ${map?.edges.filter((edge) => !edge.source?.startLine).length ?? 0}).${packetNote}`);
     }
     const flow = normalized.flows[0];
+    if (!flow) {
+      // Say what was missing, so the one smaller retry can supply it.
+      throw new AgentError("DELIVERABLE_INCOMPLETE", `A playable flow needs an id, a title, scope "${scope}" and a path of at least two steps, each with its own source. The reply had ${pass.flows.length} such ${pass.flows.length === 1 ? "flow" : "flows"}, none with this scope.${packetNote}`);
+    }
     const steps = [...(flow?.path ?? []), ...(flow?.branches ?? []).flatMap((branch) => branch.path)];
     const distinct = flow ? distinctScenarios(flow) : 0;
     const missing = flow ? missingScenarioTransitions(flow) : 0;
@@ -297,7 +328,7 @@ async function acceptFocusPass(
 
 interface FocusGenerationOptions {
   kind: FocusKind;
-  prompt: BuildingPromptInput;
+  prompt: Omit<BuildingPromptInput, "deliverable">;
   evidence: { docs: EvidenceExcerpt[]; code: EvidenceExcerpt[] };
   read: SourceReader;
   reference?: SceneReference;
@@ -319,10 +350,13 @@ function bindDecisionQuotes(diagrams: unknown, quotes: AuthoredDecisionQuote[]):
 }
 
 export async function runFocusDeliverable(options: FocusGenerationOptions): Promise<TBuildingPass> {
-  const maxTokens = options.kind === "scenario" ? 12_288 : options.kind === "map" ? 4_096 : 8_192;
+  const budget = options.kind === "scenario" ? 16_384 : options.kind === "map" ? 4_096 : 8_192;
   let issue: string | undefined;
+  let outputLimited = false;
   let last: unknown;
   for (const narrow of [false, true]) {
+    // A reply that ran out of room gets half as much again on the one smaller retry.
+    const maxTokens = narrow && outputLimited ? Math.round(budget * 1.5) : budget;
     const packet = compactLessonEvidence(options.evidence, options.kind, narrow);
     const prompt = await buildBuildingPrompt({ ...options.prompt, docs: packet.docs, codeSignals: packet.code,
       deliverable: options.kind, narrower: narrow, repairIssue: issue, scenarioMinimum: requestedScenarioMinimum(options.prompt.brief),
@@ -353,7 +387,10 @@ export async function runFocusDeliverable(options: FocusGenerationOptions): Prom
       last = error;
       if (!(error instanceof AgentError) || !["AGENT_TIMEOUT", "AGENT_NO_JSON", "AGENT_IMAGE_UNSUPPORTED", "AGENT_OUTPUT_LIMIT", "DELIVERABLE_INVALID", "DELIVERABLE_INCOMPLETE"].includes(error.code)) throw error;
       if (!narrow) {
-        issue = error.message;
+        outputLimited = error.code === "AGENT_OUTPUT_LIMIT";
+        issue = outputLimited
+          ? "The previous reply ran out of output before its JSON closed. Keep every required array, trace and source; shorten titles, captions and details instead."
+          : error.message;
         options.onRetry(`${error.code} · ${error.message.slice(0, 260)}`);
       }
     }
@@ -377,11 +414,11 @@ export function mergeFocusPasses(building: TSpaceDocument["city"]["buildings"][n
       }
     }
   }
-  const primaryMap = pass.diagrams.find((diagram) => diagram.kind === "graph");
+  const primaryMap = pass.diagrams.find((diagram) => diagram.id.startsWith("kc-map-")) ?? pass.diagrams.find((diagram) => diagram.kind === "graph");
   const components = primaryMap?.nodes.slice(0, 8).map(({ label, icon }) => ({ label, icon })) ?? [];
-  for (const kind of ["sequence", "state", "matrix"] as const) {
-    const candidates = pass.diagrams.filter((diagram) => diagram.kind === kind);
-    const diagram = candidates.find((item) => item.id.startsWith(`kc-${kind}-`)) ?? candidates[0];
+  for (const kind of LESSON_VIEWS) {
+    const diagram = pass.diagrams.find((item) => item.id.startsWith(`kc-${kind}-`))
+      ?? (kind === "context" ? undefined : pass.diagrams.find((item) => item.kind === kind));
     if (!diagram) continue;
     const source = [diagram, ...diagram.nodes, ...diagram.edges].find((item) => item.source?.startLine !== undefined)?.source;
     if (source) pass.tour.push({ ref: diagram.id, narration: diagram.note || diagram.title, source });

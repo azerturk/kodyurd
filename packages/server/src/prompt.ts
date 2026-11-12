@@ -2,7 +2,7 @@
  * Prompt builder for the in-scene guide Q&A.
  *
  * The knowledge-city generation prompts live in `packages/server/prompts/`
- * (playbook.md, city-plan.md, building-pass.md) and are assembled by
+ * (playbook.md, city-plan.md, focus-deliverable.md) and are assembled by
  * space-pipeline.ts. This file only builds the guide prompt.
  *
  * Guide grounding rules:

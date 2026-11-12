@@ -190,7 +190,7 @@ export default function Connect({ preferredAgent, hasWorkspace, onScaleChange, o
             </select>
           </label>
           <details className="studio-options"><summary>Keyboard and navigation</summary>
-            <p className="studio-muted">WASD or arrow keys walk, E opens a nearby station, M shows the city map, and Tab opens the city menu. Diagram indexes provide keyboard access to components and links.</p>
+            <p className="studio-muted">WASD or the up and down arrows walk, the left and right arrows turn the view, E opens a nearby station, M shows the city map, and Tab opens the city menu. Diagram indexes provide keyboard access to components and links.</p>
           </details>
         </section>
       </div>

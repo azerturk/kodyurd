@@ -90,13 +90,13 @@ export interface SpaceDiagram {
   id: string;
   owner: string;
   title: string;
-  kind: "graph" | "sequence" | "state" | "stack" | "timeline" | "matrix" | "erd";
+  kind: "graph" | "sequence" | "state" | "stack" | "timeline" | "matrix" | "erd" | "class" | "mindmap";
   nodes: SpaceDiagramNode[];
   edges: { id?: string; from: string; to: string; label?: string; kind?: string; guard?: string;
     cardinality?: { from: SpaceCardinality; to: SpaceCardinality }; source?: SpaceSource }[];
   note?: string;
   source?: SpaceSource;
-  origin?: "docs" | "code" | "mermaid";
+  origin?: "docs" | "code" | "mermaid" | "user";
   claims?: SpaceDiagramClaim[];
 }
 

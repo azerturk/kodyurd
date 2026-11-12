@@ -66,8 +66,7 @@ test("a narrow map retry keeps the authored graph and names missing citations", 
   ] };
   let reason;
   const result = await runFocusDeliverable({ kind: "map", evidence,
-    prompt: { building: { id: "b", title: "Building", moduleRef: "src/building" }, brief: "Focus this module", language: "en",
-      interiorBudget: "full", focused: true, existingFlowIds: [], existingDiagramIds: [] },
+    prompt: { building: { id: "b", title: "Building", moduleRef: "src/building" }, brief: "Focus this module", language: "en" },
     read: async (file) => file === origin.path ? ["```mermaid", "flowchart LR", "A --> B", "```"] : null,
     run: async (prompt, options, narrow) => {
       assert.equal(options.maxTokens, 4_096);
@@ -97,7 +96,7 @@ test("scenario retries a provider output limit without forwarding partial conten
     process.env.ANTHROPIC_API_KEY = "fixture-only";
     globalThis.fetch = async (url, request) => {
       assert.equal(url, "https://api.anthropic.com/v1/messages");
-      assert.equal(JSON.parse(request.body).max_tokens, 12_288);
+      assert.equal(JSON.parse(request.body).max_tokens, calls === 0 ? 16_384 : 24_576);
       calls++;
       return new Response(JSON.stringify(calls === 1 ? {
         stop_reason: "max_tokens", content: [{ type: "text", text: "discarded provider fragment" }]
@@ -106,8 +105,7 @@ test("scenario retries a provider output limit without forwarding partial conten
     const result = await runFocusDeliverable({ kind: "scenario", evidence: { docs: [], code: [
       { path: source.path, kind: "code", startLine: 1, endLine: 1, text: "export const work = true;" }
     ] },
-      prompt: { building: { id: "b", title: "Worker", moduleRef: "src" }, brief: "Show the worker", language: "en",
-        interiorBudget: "full", focused: true, existingFlowIds: [], existingDiagramIds: [] },
+      prompt: { building: { id: "b", title: "Worker", moduleRef: "src" }, brief: "Show the worker", language: "en" },
       read: async () => ["export const work = true;"],
       run: (prompt, options) => runAgent("api", { ...options, prompt, cwd: process.cwd(), timeoutMs: 1_000 }),
       onRetry: (reason) => { retry = reason; }
@@ -189,8 +187,7 @@ test("a delivery path with a retry title must play the actual sourced retry befo
   let reason;
   const result = await runFocusDeliverable({ kind: "scenario",
     evidence: { docs: [], code: [{ path, kind: "code", startLine: 1, endLine: 3, text: lines.join("\n") }] },
-    prompt: { building: { id: "b", title: "Receiver", moduleRef: "src" }, brief, language: "en",
-      interiorBudget: "full", focused: true, existingFlowIds: [], existingDiagramIds: [], evidenceOnly: true },
+    prompt: { building: { id: "b", title: "Receiver", moduleRef: "src" }, brief, language: "en", evidenceOnly: true },
     read: async (file) => file === path ? lines : null,
     run: async (prompt, _, narrow) => {
       assert.match(prompt, /retry-recovery/);
@@ -204,6 +201,29 @@ test("a delivery path with a retry title must play the actual sourced retry befo
   assert.deepEqual(result.flows[0].scenarios[0].steps, ["queued", "retry-scheduled", "delivered"]);
 });
 
+test("a one-step reply is told what a playable flow needs, and a lone unscoped flow joins its building", async () => {
+  const path = "identity/access.mjs";
+  const lines = ["export function canManage(actor, booking) {", "  return actor.role === 'operator' || actor.id === booking.ownerId;", "}"];
+  const step = (id, caption, line) => ({ id, ref: `step:${id}`, caption, source: { path, startLine: line, endLine: line } });
+  let reason;
+  const result = await runFocusDeliverable({ kind: "scenario",
+    evidence: { docs: [], code: [{ path, kind: "code", startLine: 1, endLine: 3, text: lines.join("\n") }] },
+    prompt: { building: { id: "identity", title: "Identity", moduleRef: "identity" }, brief: "Who may cancel a booking", language: "en", evidenceOnly: true },
+    read: async (file) => file === path ? lines : null,
+    run: async (prompt, _, narrow) => {
+      assert.match(prompt, /a flow has at least two/);
+      if (narrow) assert.match(prompt, /path of at least two steps/);
+      const steps = narrow ? [step("call", "canManage is called", 1), step("result", "Owner or operator may manage", 2)] : [step("call", "canManage is called", 1)];
+      // The smaller retry leaves the scope out; one flow for this deliverable can only be this building's.
+      return JSON.stringify({ flows: [{ id: "manage", title: "Who may manage", scope: narrow ? undefined : "module:identity", path: steps,
+        scenarios: [{ id: "owner", title: "Owner manages", steps: steps.map(({ id }) => id) }] }] });
+    }, onRetry: (message) => { reason = message; }
+  });
+  assert.match(reason, /DELIVERABLE_INCOMPLETE · A playable flow needs an id, a title, scope "module:identity" and a path of at least two steps/);
+  assert.equal(result.flows[0].scope, "module:identity");
+  assert.deepEqual(result.flows[0].path.map(({ id }) => id), ["call", "result"]);
+});
+
 test("Explain fingerprints packet claims and only links the supported replay occurrence", async () => {
   const file = "reader.test.js";
   const lines = ["const request = read();", 'assert.equal(readAgain().state, "ready");', "// separate source outside the packet"];
@@ -215,8 +235,7 @@ test("Explain fingerprints packet claims and only links the supported replay occ
   ], edges: [{ id: "read", from: "reader", to: "state", source: src(2) }], claims: [claim("valid", 2), claim("outside", 3)] }] };
   const read = async (name) => name === file ? lines : null;
   const pass = await runFocusDeliverable({ kind: "map", evidence: { docs: [], code: [{ path: file, kind: "code", startLine: 1, endLine: 2, text: lines.slice(0, 2).join("\n") }] },
-    prompt: { building: { id: "b", title: "Reader", moduleRef: "src" }, brief: "Explain the ready rule", language: "en",
-      interiorBudget: "full", focused: true, existingFlowIds: [], existingDiagramIds: [], evidenceOnly: true },
+    prompt: { building: { id: "b", title: "Reader", moduleRef: "src" }, brief: "Explain the ready rule", language: "en", evidenceOnly: true },
     read, run: async () => JSON.stringify(raw), onRetry: () => assert.fail("valid Explain claim should pass without repair")
   });
   assert.deepEqual(pass.diagrams[0].claims.map(({ id }) => id), ["valid"]);
@@ -238,8 +257,7 @@ test("packet-only replays repair a real line outside the shown numbered evidence
   const point = (id, startLine) => ({ id, ref: `step:${id}`, source: { path: source.path, startLine } });
   let reason;
   const pass = await runFocusDeliverable({ kind: "scenario", evidence,
-    prompt: { building: { id: "b", title: "Format", moduleRef: "src" }, brief: "Show the ordinary function result", language: "en",
-      interiorBudget: "full", focused: true, existingFlowIds: [], existingDiagramIds: [], evidenceOnly: true },
+    prompt: { building: { id: "b", title: "Format", moduleRef: "src" }, brief: "Show the ordinary function result", language: "en", evidenceOnly: true },
     read: async (file) => file === source.path ? lines : null,
     run: async (prompt, _, narrow) => {
       assert.match(prompt, /4 \|   return value\.toFixed\(1\)/);

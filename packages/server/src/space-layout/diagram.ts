@@ -8,6 +8,8 @@ import type { TSpaceDocument, DiagramLayout, LDiagramNode, LDiagramEdge } from "
  * sequence: lifelines (actors as columns, messages as ordered horizontal arrows).
  * state:    reachability layers from explicit initial states, preserving retries.
  * erd:      graph layers with room for entity fields and relationship cardinality.
+ * class:    the same cards for classes, their members and typed relations.
+ * mindmap:  the root in the middle, each branch in its own wedge around it.
  * stack:    vertical layers, bottom-up.
  * timeline: horizontal chain.
  * matrix:   grid, grouped by `group` (columns), insertion order inside.
@@ -216,7 +218,7 @@ function layoutGraph(diagram: SpaceDiagramT, layer = layerByLongestPath(diagram)
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes: LDiagramNode[] = [];
   const colX: number[] = [];
-  const entityMap = diagram.kind === "erd";
+  const entityMap = diagram.kind === "erd" || diagram.kind === "class";
   const gapX = entityMap ? 154 : GAP_X;
   const gapY = entityMap ? 82 : GAP_Y;
   const widthFor = (id: string): number => entityMap ? Math.max(210, nodeW(byId.get(id)!.label)) : nodeW(byId.get(id)!.label);
@@ -367,6 +369,67 @@ function layoutMatrix(diagram: SpaceDiagramT): DiagramLayout {
   };
 }
 
+function layoutMindmap(diagram: SpaceDiagramT): DiagramLayout {
+  const ids = new Set(diagram.nodes.map(({ id }) => id));
+  const children = new Map<string, string[]>();
+  const placed = new Set<string>();
+  for (const { from, to } of diagram.edges) {
+    if (from === to || placed.has(to) || !ids.has(from) || !ids.has(to)) continue;
+    placed.add(to);
+    children.set(from, [...(children.get(from) ?? []), to]);
+  }
+  const root = diagram.nodes.find(({ id }) => !placed.has(id)) ?? diagram.nodes[0];
+  // A branch takes a share of the circle in proportion to its leaves.
+  const leaves = new Map<string, number>();
+  const count = (id: string, seen: Set<string>): number => {
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const total = (children.get(id) ?? []).reduce((sum, child) => sum + count(child, seen), 0) || 1;
+    leaves.set(id, total);
+    return total;
+  };
+  count(root.id, new Set());
+  const center = new Map<string, { x: number; y: number }>();
+  const RING_X = 300;
+  const RING_Y = 170;
+  const place = (id: string, depth: number, start: number, end: number): void => {
+    const angle = (start + end) / 2;
+    center.set(id, depth === 0 ? { x: 0, y: 0 } : { x: Math.cos(angle) * RING_X * depth, y: Math.sin(angle) * RING_Y * depth });
+    let cursor = start;
+    for (const child of children.get(id) ?? []) {
+      if (center.has(child)) continue;
+      const span = (end - start) * (leaves.get(child) ?? 1) / (leaves.get(id) ?? 1);
+      place(child, depth + 1, cursor, cursor + span);
+      cursor += span;
+    }
+  };
+  place(root.id, 0, -Math.PI / 2, Math.PI * 1.5);
+  // Topics outside the tree keep a row of their own below it.
+  const loose = diagram.nodes.filter(({ id }) => !center.has(id));
+  const floor = Math.max(...[...center.values()].map(({ y }) => y), 0) + RING_Y;
+  loose.forEach(({ id }, index) => center.set(id, { x: (index - (loose.length - 1) / 2) * 260, y: floor }));
+  const box = diagram.nodes.map(({ id, label }) => {
+    const { x, y } = center.get(id)!;
+    const w = nodeW(label);
+    return { id, x: x - w / 2, y: y - NODE_H / 2, w, h: NODE_H };
+  });
+  const left = Math.min(...box.map(({ x }) => x));
+  const top = Math.min(...box.map(({ y }) => y));
+  const nodes: LDiagramNode[] = box.map((node) => ({ ...node, x: node.x - left + PAD, y: node.y - top + PAD }));
+  const at = new Map(nodes.map((node) => [node.id, node]));
+  const edges: LDiagramEdge[] = diagram.edges.flatMap(({ from, to, label }) => {
+    const a = at.get(from);
+    const b = at.get(to);
+    return a && b ? [{ from, to, label, points: [{ x: a.x + a.w / 2, y: a.y + a.h / 2 }, { x: b.x + b.w / 2, y: b.y + b.h / 2 }] }] : [];
+  });
+  return {
+    id: diagram.id,
+    width: Math.max(...nodes.map(({ x, w }) => x + w)) + PAD,
+    height: Math.max(...nodes.map(({ y, h }) => y + h)) + PAD,
+    nodes, edges, lanes: []
+  };
+}
+
 export function layoutDiagram(diagram: SpaceDiagramT): DiagramLayout {
   switch (diagram.kind) {
     case "sequence":
@@ -374,7 +437,10 @@ export function layoutDiagram(diagram: SpaceDiagramT): DiagramLayout {
     case "state":
       return layoutGraph(diagram, stateLayers(diagram));
     case "erd":
+    case "class":
       return layoutGraph(diagram);
+    case "mindmap":
+      return layoutMindmap(diagram);
     case "stack":
       return layoutStack(diagram);
     case "timeline":

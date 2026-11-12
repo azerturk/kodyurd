@@ -1,11 +1,13 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import { buildSpaceExport, exportZipPath, readSavedSpace, readSavedSpaceFile } from "./export.js";
 import { getAnthropicKey, getTripoKey, readKeys, writeKeys } from "./config.js";
 import { installedPackRoles, packAssetPath, packDirectory } from "./asset-registry.js";
-import { indexMarkdown } from "./analyzer.js";
+import { indexDocument } from "./analyzer.js";
+import { asMarkdownLines } from "./documents.js";
+import { documentFormat, isDocumentPath } from "./source-paths.js";
 import { tripoCacheGlb } from "./tripo.js";
 import type { SqliteDb } from "./db.js";
 import { runDoctor } from "./doctor.js";
@@ -18,9 +20,11 @@ import {
   getJob,
   getOrCreateAnalysis,
   hasActiveGuide,
+  LESSON_HARD_LIMIT,
   offersPath,
   overlaysPath,
   projectDir,
+  retainOverlayBindings,
   spacePath,
   startOverlayJob,
   startSpaceJob,
@@ -32,6 +36,10 @@ import { editorStatus, openEditor } from "./editor.js";
 import { clearWorkspaceCache, removeWorkspace } from "./workspace-maintenance.js";
 import { isWorkspaceUnderMaintenance, tryAcquireWorkspaceOperation } from "./workspace-operation.js";
 import { overlayBuilding, savedBuildingIdentities, type OverlayRecord } from "./overlay-records.js";
+import { openSavedCity, readSavedCities, removeSavedCity } from "./saved-cities.js";
+import { parseMermaidText } from "./authored-diagrams.js";
+import { readDiagramEdits, removeDiagramEdit, saveDiagramEdit, userDiagram } from "./diagram-edits.js";
+import { parseDrawio } from "./drawio.js";
 
 export interface ApiContext {
   db: SqliteDb;
@@ -387,6 +395,127 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
     }
   });
 
+  // Build every building the brief asked about that waited beyond the lesson limit.
+  app.post("/api/projects/:id/jobs/:jobId/lessons/continue", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    const project = getProject(db, id);
+    const job = getJob(db, jobId);
+    if (!project || !job || job.projectId !== id || job.kind !== "space") {
+      return reply.code(404).send({ error: "Generation job not found." });
+    }
+    if (job.status === "queued" || job.status === "running") return reply.code(409).send(WORKSPACE_BUSY);
+    if (!job.lessonsWaiting || !job.focusReady) return reply.code(409).send({ error: "This generation has no further lessons to add." });
+    const settings = generationSettings(db, id);
+    if (!settings) return reply.code(409).send({ error: "Start a new generation to recover its saved settings." });
+    const result = startSpaceJob({
+      db, dataDir, project, brief: settings.brief, language: settings.language,
+      agent: settings.agent, model: settings.model ?? undefined, refreshScan: false,
+      resume: { jobId }, lessonLimit: LESSON_HARD_LIMIT
+    });
+    if ("error" in result) return reply.code(409).send({ error: result.error });
+    return { jobId: result.jobId };
+  });
+
+  /* The user's own diagrams: corrections of generated ones, imports and drawings. */
+  const diagramIdPattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+  const saveUserDiagram = async (id: string, diagramId: string | undefined, input: unknown) => {
+    const project = getProject(db, id)!;
+    const saved = await readSavedSpaceFile(spacePath(dataDir, id), project.source_dir);
+    const targetId = diagramId ?? `user-${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+    const original = saved.space.diagrams.find((diagram) => diagram.id === targetId);
+    const known = original ?? (await readDiagramEdits(dataDir, id)).find((diagram) => diagram.id === targetId);
+    if (diagramId && !known) throw new AgentError("DIAGRAM_NOT_FOUND", "This diagram is no longer part of the city.");
+    const diagram = userDiagram(input, saved.space, targetId, original);
+    await saveDiagramEdit(dataDir, id, diagram);
+    return { diagram };
+  };
+  const diagramRoute = async (id: string, reply: FastifyReply, work: () => Promise<unknown>) => {
+    if (!getProject(db, id)) return reply.code(404).send({ error: "project not found" });
+    if (!existsSync(spacePath(dataDir, id))) return reply.code(409).send({ error: "Generate a city before editing its diagrams." });
+    const release = tryAcquireWorkspaceOperation(id);
+    if (!release) return reply.code(409).send(WORKSPACE_BUSY);
+    try {
+      return await work();
+    } catch (error) {
+      if (!(error instanceof AgentError)) throw error;
+      return reply.code(error.code === "DIAGRAM_NOT_FOUND" ? 404 : 400).send({ error: error.message });
+    } finally {
+      release();
+    }
+  };
+
+  app.post("/api/projects/:id/diagrams", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    return diagramRoute(id, reply, () => saveUserDiagram(id, undefined, (req.body as { diagram?: unknown } | null)?.diagram));
+  });
+
+  app.put("/api/projects/:id/diagrams/:diagramId", async (req, reply) => {
+    const { id, diagramId } = req.params as { id: string; diagramId: string };
+    if (!diagramIdPattern.test(diagramId)) return reply.code(400).send({ error: "Invalid diagram id." });
+    return diagramRoute(id, reply, () => saveUserDiagram(id, diagramId, (req.body as { diagram?: unknown } | null)?.diagram));
+  });
+
+  app.delete("/api/projects/:id/diagrams/:diagramId", async (req, reply) => {
+    const { id, diagramId } = req.params as { id: string; diagramId: string };
+    return diagramRoute(id, reply, async () => {
+      if (!await removeDiagramEdit(dataDir, id, diagramId)) throw new AgentError("DIAGRAM_NOT_FOUND", "This diagram has no saved edit.");
+      return { ok: true };
+    });
+  });
+
+  // Reads pasted Mermaid text or a diagrams.net file into an unsaved diagram for the editor.
+  app.post("/api/projects/:id/diagrams/import", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!getProject(db, id)) return reply.code(404).send({ error: "project not found" });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const text = typeof body.text === "string" ? body.text : "";
+    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim().slice(0, 100) : "Imported diagram";
+    const owner = typeof body.owner === "string" && diagramIdPattern.test(body.owner) ? body.owner : "city";
+    if (!text.trim() || text.length > 600_000) return reply.code(400).send({ error: "Paste Mermaid text or choose a .drawio file." });
+    const diagram = body.format === "drawio" ? parseDrawio(text, owner, title) : parseMermaidText(text, owner, title);
+    if (!diagram) {
+      return reply.code(400).send({ error: body.format === "drawio"
+        ? "This file has no shapes and connectors Kodyurd can read."
+        : "This Mermaid text uses a notation or statement Kodyurd does not import yet." });
+    }
+    return { diagram };
+  });
+
+  app.get("/api/projects/:id/cities", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!getProject(db, id)) return reply.code(404).send({ error: "project not found" });
+    return readSavedCities(dataDir, id);
+  });
+
+  app.post("/api/projects/:id/cities/:jobId/open", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    if (!getProject(db, id)) return reply.code(404).send({ error: "project not found" });
+    const release = hasActiveGuide(id) ? null : tryAcquireWorkspaceOperation(id);
+    if (!release) return reply.code(409).send(WORKSPACE_BUSY);
+    try {
+      await retainOverlayBindings(dataDir, id).catch(() => undefined);
+      const city = await openSavedCity(dataDir, id, jobId);
+      if (!city) return reply.code(404).send({ error: "This saved city is no longer available." });
+      db.prepare("UPDATE project_generation SET brief = ?, language = ? WHERE project_id = ?").run(city.brief, city.language, id);
+      return { city };
+    } finally {
+      release();
+    }
+  });
+
+  app.delete("/api/projects/:id/cities/:jobId", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    if (!getProject(db, id)) return reply.code(404).send({ error: "project not found" });
+    const release = tryAcquireWorkspaceOperation(id);
+    if (!release) return reply.code(409).send(WORKSPACE_BUSY);
+    try {
+      if (!await removeSavedCity(dataDir, id, jobId)) return reply.code(409).send({ error: "The open city stays saved. Open another city first." });
+      return { ok: true };
+    } finally {
+      release();
+    }
+  });
+
   app.get("/api/projects/:id/jobs/:jobId/draft", async (req, reply) => {
     const { id, jobId } = req.params as { id: string; jobId: string };
     const job = getJob(db, jobId);
@@ -500,14 +629,18 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
       return reply.code(400).send({ error: "The source line range is invalid." });
     }
     const to = Math.min(lines.length, requestedTo, requestedFrom + 399);
+    const format = documentFormat(rel);
     return {
       path: rel,
       from: requestedFrom,
       to,
       totalLines: lines.length,
-      sections: /\.md$/i.test(rel) && query.outline === "1"
-        ? indexMarkdown(lines.join("\n")).sections.filter((section) => section.kind === "section").slice(0, 100) : undefined,
-      text: lines.slice(requestedFrom - 1, to).join("\n")
+      sections: isDocumentPath(rel) && query.outline === "1"
+        ? indexDocument(lines.join("\n"), rel).sections.filter((section) => section.kind === "section").slice(0, 100) : undefined,
+      text: lines.slice(requestedFrom - 1, to).join("\n"),
+      // reStructuredText and AsciiDoc are shown through the Markdown reader; `text` stays the file as written.
+      display: format === "rst" || format === "asciidoc"
+        ? asMarkdownLines(lines, format).slice(requestedFrom - 1, to).join("\n") : undefined
     };
   });
 

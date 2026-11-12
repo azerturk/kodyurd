@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { claimsForItem, connectionsForNode, diagramItems } from "../src/viewer/diagram-explanation.ts";
+import { DIAGRAM_KINDS } from "@kodyurd/scene-schema";
+import { claimsForItem, connectionsForNode, diagramItems, diagramTitle } from "../src/viewer/diagram-explanation.ts";
 import { diagramForDocumentFence, indexReadingEvidence, relatedReadingEvidence } from "../src/viewer/document-navigation.ts";
 import { buildFlowReplay, replayDifferences } from "../src/viewer/flow-replay.ts";
 import { worldHudPanel } from "../src/viewer/viewer-overlays.ts";
@@ -19,6 +20,12 @@ const diagram = {
       evidence: [{ kind: "docs", path: "docs/policy.md", startLine: 9, endLine: 12 }] }
   ]
 };
+
+test("the viewer names every diagram kind the schema accepts", () => {
+  for (const kind of DIAGRAM_KINDS) assert.match(diagramTitle({ kind, id: "diagram" }), /\S/, kind);
+  assert.equal(diagramTitle({ kind: "graph", id: "kc-map-0a1b" }), "Component map");
+  assert.equal(diagramTitle({ kind: "graph", id: "kc-context-0a1b" }), "System context");
+});
 
 test("explanation shares exact engine graph references and preserves directed relationships", () => {
   const items = diagramItems(diagram);

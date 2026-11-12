@@ -47,19 +47,21 @@ Rules that exist because we hit the failure:
   `buildAskPrompt`) frames the analyzed folder as **untrusted data**: content to
   describe, never instructions to follow. Keep that framing in any new prompt.
 - The contract text lives in `packages/server/prompts/*.md` (playbook /
-  city-plan / building-pass) and is generated from the real schema behavior —
+  city-plan / focus-deliverable) and is generated from the real schema behavior —
   update it with the schema (see `docs/skills/scene-schema.md`).
 - Responses must be strict JSON. Extraction: `extractJsonObject` (fenced block
   first, then balanced-brace scan preferring candidates containing the caller's
-  hint — `"buildings"` for P1, `"coverage"` for P2, `"answer"` for ask).
+  hint — `"buildings"` for the city plan, `"diagrams"` or `"flows"` for a lesson part,
+  `"answer"` for ask).
   One repair or focused enrichment attempt is allowed for each response. Record
   unresolved validation and evidence gaps in the job result.
 
 ## Deliverable and provider review
 
 - Use the scan's exact module ID if the learner picks one. Use the brief as data. Keep the workspace root read-only, and give the provider the smallest relevant evidence packet.
-- A separate `Lesson modules: module-a, module-b` brief line accepts up to two exact scanned module IDs alongside the primary focus. Plan one city, keep the primary arrival, and review each named lesson against its own evidence. A documentation-only module can contribute a sourced design map without a replay, even when the same workspace includes running code.
-- Give component maps, replays, sequence diagrams, state machines and decision tables independent job states. A ready artifact opens from its draft while the other parts run. A focused retry reuses the same plan and valid artifacts. Each new provider call stays bounded.
+- The brief decides how many buildings get a lesson. The city plan lists the buildings the brief asks about as `lessons`, each with the part of the brief it answers and up to four views the brief asks for: `sequence`, `state`, `matrix`, `erd`, `class`, `mindmap` or `context`. A view the plan places in one lesson is drawn there, even when the brief's wording would also match the focus. A job teaches at least two buildings when the city has two and ten at most; the others wait until the user continues the job. Lessons added from the brief run after the focus is published, two at a time, and a failed one stays pending without holding the city back.
+- A separate `Lesson modules: module-a, module-b` brief line pins up to nine exact scanned module IDs alongside the primary focus. The focus and every pinned lesson must be ready before the city is published. Plan one city, keep the primary arrival, and review each named lesson against its own evidence. A documentation-only module can contribute a sourced design map without a replay, even when the same workspace includes running code.
+- Give component maps, replays, sequence diagrams, state machines, decision tables, data models, class diagrams, mind maps and system context graphs independent job states. Every node and relationship of a view needs its own verified source range; a mind-map branch takes the range of the topic it leads to. A ready artifact opens from its draft while the other parts run. A focused retry reuses the same plan and valid artifacts. Each new provider call stays bounded.
 - Send numbered excerpts for focused requests. Replay events can carry different state and source at different occurrences. For every numeric example, compare the emitted state and exact assertion to the fixture output before release. Range existence is only the first check.
 - For explicit replay comparisons, check the played actions and their terminal results. A retry title needs a sourced scheduling or wait step, and a recovery needs a successful outcome after that step. Keep a single real path valid for ordinary briefs. Documentation-only workspaces teach the authored design and do not require an executable replay.
 - Explain claims cite exact numbered packet spans. The server records their fingerprints, rejects rationale that is absent from its authored span, and connects a claim to an exact replay occurrence only when the supporting range also covers that event or step.
@@ -69,10 +71,10 @@ Rules that exist because we hit the failure:
 ## Job UX
 
 - Stages are the user's only window into a long run: heartbeat every 55 s per
-  agent call (tagged "P1" / "P2 <building>"), stage list capped (middle spliced).
+  agent call (tagged "P1" or the deliverable's title), stage list capped (middle spliced).
 - Never put prompts, file contents, or keys into stages. Stage text is honest,
   short, present tense.
 - One job per project at a time — the space job and the overlay job share the
-  lock (P2 passes run in parallel inside the space job); ask (`/ask`) is
+  lock (lessons added from the brief run two at a time inside the space job); ask (`/ask`) is
   serialized per project
   (409 `ASK_BUSY`).

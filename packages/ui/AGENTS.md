@@ -10,6 +10,9 @@ Use the shared Knowledge City viewer for live and exported scenes:
   `offline={{ payload, packRoles, assetBase }}` and it runs with zero API calls (guide tab
   hidden, source reading shows an honest note). `export-main.tsx` is that entry — it
   fetches `./space.json` from the bundle.
+- `viewer/DiagramEditor.tsx` + `diagram-export.ts` — correcting, drawing and exporting diagrams.
+  The editor only builds a diagram object; the server validates and stores it, and the viewer
+  reloads the city. Editing is off in drafts and exported bundles.
 - Tour autopilot lives in the engine (`walkTo` straight-line walk with manual
   override, `setTrail` ground dots, `onAutoArrive`); the viewer adds the auto
   toggle, narration-timed advance and the trophy modal. Personal overlays mount
@@ -30,6 +33,10 @@ Engine rules (full version: `docs/skills/playcanvas.md`):
   `PackAssets` registry. Hide the replacement geometry while a listed asset is
   pending and reveal the GLB only after fitting. Missing or invalid files use
   procedural geometry. The opening cover waits for the first view's fitted models.
+  A role the engine starts to mount is also listed in `collectPackRoles`
+  (`packages/server/src/export.ts`), or an exported city falls back to the procedural stand-in.
+- **Look and walk**: WASD and the up and down arrows walk; the left and right arrows turn the
+  view, so the city works without a mouse or pointer lock.
 - **Character animations**: the pack character mounts from
   `character-default.anim.idle` and registers idle/walk/run/jump as states on the anim
   component's implicit layer; movement state drives `baseLayer.transition(name, ~0.16)`.

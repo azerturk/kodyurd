@@ -1,12 +1,10 @@
 import * as pc from "playcanvas";
 import type {
   CityLayout,
-  DiagramLayout,
   InteriorLayout,
   SpaceBuilding,
   SpaceDiagram,
   SpaceDiagramField,
-  SpaceDoc,
   SpaceFlow,
   SpaceOverlay,
   SpacePayload,
@@ -14,6 +12,7 @@ import type {
 } from "../space-types";
 import { buildFlowReplay, selectReplayCursor, type ReplayTrace } from "./flow-replay";
 import { cityRelationships, type CityRelationship } from "./city-relations";
+import { diagramTitle } from "./diagram-explanation";
 import { overviewLinkRoute, visibleOverviewLinks } from "./overview-links";
 import { renderIconGlyph, renderSpatialGraph, renderSpatialSequence, spatialDiagram, spatialSequence, type SpatialEdge, type SpatialNode, type SpatialView } from "./spatial-graph";
 import { fitDisplayCopy, signFaceMount, workshopExhibits, wrapDisplayCopy } from "./exhibit-layout";
@@ -1007,7 +1006,7 @@ export function createSpaceViewer(
         source: masterDiagram.source,
         hint: "open diagram"
       },
-      action: () => openDiagramPanel(masterDiagram, p.x, p.z - 4)
+      action: () => openDiagramPanel(masterDiagram)
     });
   }
 
@@ -1377,6 +1376,20 @@ export function createSpaceViewer(
       x: lb.pos.x, y: lb.size.h + 1.6, z: lb.pos.z, text: meta.title, range2: Infinity, minor: false
     });
     const hasInterior = interiorByBuilding.has(lb.id);
+    if (hasInterior) {
+      // A banner beside the door marks a building that has a lesson to enter.
+      const bannerX = doorX + lb.doorDir.x * 1.15 - lb.doorDir.z * 3.05;
+      const bannerZ = doorZ + lb.doorDir.z * 1.15 + lb.doorDir.x * 3.05;
+      const banner = new pc.Entity(`lesson-banner:${lb.id}`);
+      banner.setPosition(bannerX, 0, bannerZ);
+      banner.setEulerAngles(0, Math.atan2(lb.doorDir.x, lb.doorDir.z) * 180 / Math.PI, 0);
+      cityRoot.addChild(banner);
+      part(banner, "cylinder", 0.09, 3.1, 0.09, 0, 1.55, 0, materialFor(DAY.metal));
+      part(banner, "cylinder", 0.5, 0.08, 0.5, 0, 0.04, 0, materialFor(DAY.metal));
+      part(banner, "box", 0.72, 1.75, 0.05, 0.42, 2.12, 0, materialFor("#1f6f66", DAY.teal, 0.22));
+      mountPack(banner, "lesson-banner", 3.2, 0, childrenOf(banner));
+      addSolid("city", bannerX, bannerZ, 0.5, 0.5, 3.1, "lesson banner");
+    }
     const ownsDiagram = space.diagrams.some((item) =>
       item.owner === lb.id || item.owner.startsWith(`${lb.id}:`)
     );
@@ -1622,9 +1635,7 @@ export function createSpaceViewer(
       ctx.font = font(fit.size);
       for (const [index, line] of fit.lines.entries()) ctx.fillText(line, inset, top + index * fit.leading);
     };
-    const type = diagram.kind === "sequence" ? "Sequence" : diagram.kind === "state" ? "State machine"
-      : diagram.kind === "matrix" ? "Decision table" : diagram.kind === "graph" ? "Component map"
-      : diagram.kind === "stack" ? "Layer map" : "Timeline";
+    const type = diagramTitle(diagram);
     const stock = ctx.createLinearGradient(0, 0, w, h);
     stock.addColorStop(0, "#fff9ea");
     stock.addColorStop(1, "#efe2c7");
@@ -1653,148 +1664,6 @@ export function createSpaceViewer(
     if (twoSided) addSignFace(parent, width, height, y, 0, 0.178, -1, face, "diagram-exhibit-back");
   }
 
-  function drawDiagram(
-    screen: Screen,
-    diagram: SpaceDiagram,
-    lay: DiagramLayout,
-    highlight: number,
-    pulseT: number
-  ): void {
-    const { ctx, canvas: c } = screen;
-    const sx = c.width / Math.max(lay.width, 1);
-    const sy = c.height / Math.max(lay.height, 1);
-    const s = Math.min(sx, sy);
-    const ox = (c.width - lay.width * s) / 2;
-    const oy = (c.height - lay.height * s) / 2;
-    ctx.fillStyle = "#f9f0de";
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.save();
-    ctx.translate(ox, oy);
-    ctx.scale(s, s);
-    // title
-    ctx.fillStyle = "#253831";
-    ctx.font = "bold 24px system-ui, sans-serif";
-    ctx.fillText(diagram.title, 14, 24);
-    // lanes (sequence lifelines)
-    ctx.strokeStyle = "#2a3a44";
-    ctx.lineWidth = 2;
-    for (const lane of lay.lanes) {
-      ctx.beginPath();
-      ctx.moveTo(lane.x, 70);
-      ctx.lineTo(lane.x, lay.height - 16);
-      ctx.stroke();
-    }
-    // edges
-    const order = playbackOrder(diagram, lay);
-    lay.edges.forEach((e, i) => {
-      const isHl = highlight >= 0 && order.kind === "edges" && i === highlight;
-      ctx.strokeStyle = isHl ? "#08766c" : "#526761";
-      ctx.lineWidth = isHl ? 5 : 2.5;
-      ctx.beginPath();
-      e.points.forEach((p, j) => (j === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-      ctx.stroke();
-      const a = e.points[e.points.length - 2] ?? e.points[0];
-      const b = e.points[e.points.length - 1];
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      ctx.fillStyle = isHl ? "#08766c" : "#526761";
-      ctx.beginPath();
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x - 12 * Math.cos(ang - 0.4), b.y - 12 * Math.sin(ang - 0.4));
-      ctx.lineTo(b.x - 12 * Math.cos(ang + 0.4), b.y - 12 * Math.sin(ang + 0.4));
-      ctx.closePath();
-      ctx.fill();
-      if (e.label) {
-        const mid = e.points[Math.floor(e.points.length / 2)];
-        ctx.fillStyle = "#2d433b";
-        ctx.font = "600 15px system-ui, sans-serif";
-        ctx.fillText(e.label, mid.x + 6, mid.y - 6);
-      }
-      if (isHl) {
-        // moving pulse along the highlighted edge
-        const t = pulseT;
-        const segs = e.points.length - 1;
-        const f = Math.min(segs - 0.0001, t * segs);
-        const si = Math.floor(f);
-        const ft = f - si;
-        const px = e.points[si].x + (e.points[si + 1].x - e.points[si].x) * ft;
-        const py = e.points[si].y + (e.points[si + 1].y - e.points[si].y) * ft;
-        ctx.fillStyle = "#9ff2e4";
-        ctx.beginPath();
-        ctx.arc(px, py, 7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-    // nodes
-    const nodeIndex = new Map(order.kind === "nodes" ? order.ids.map((id, i) => [id, i]) : []);
-    for (const n of lay.nodes) {
-      const meta = diagram.nodes.find((dn) => dn.id === n.id);
-      const isHl = highlight >= 0 && order.kind === "nodes" && nodeIndex.get(n.id) === highlight;
-      ctx.fillStyle = isHl ? "#b9e4d8" : "#fffaf0";
-      ctx.strokeStyle = isHl ? "#08766c" : "#73837a";
-      ctx.lineWidth = isHl ? 4 : 2;
-      roundRect(ctx, n.x, n.y, n.w, n.h, 8);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#253831";
-      ctx.font = "bold 15px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(meta?.label ?? n.id, n.x + n.w / 2, n.y + n.h / 2 + 5, n.w - 14);
-      ctx.textAlign = "left";
-      if (meta?.icon) {
-        ctx.fillStyle = "#385d51";
-        ctx.font = "11px system-ui, sans-serif";
-        ctx.fillText(meta.icon, n.x + 6, n.y + 13);
-      }
-    }
-    ctx.restore();
-  }
-
-  function roundRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number
-  ): void {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  function playbackOrder(
-    diagram: SpaceDiagram,
-    lay: DiagramLayout
-  ): { kind: "edges" | "nodes"; ids: string[] } {
-    if (diagram.kind === "sequence" && lay.edges.length > 0) {
-      return { kind: "edges", ids: lay.edges.map((_, i) => String(i)) };
-    }
-    const sorted = [...lay.nodes].sort((a, b) => a.x - b.x || a.y - b.y);
-    return { kind: "nodes", ids: sorted.map((n) => n.id) };
-  }
-
-  // --- inspect panel -----------------------------------------------------------------
-  const inspectScreen = makeScreen(1024, 640);
-  const inspectPanel = new pc.Entity("inspect-panel");
-  inspectPanel.enabled = false;
-  app.root.addChild(inspectPanel);
-  part(inspectPanel, "box", 7.6, 4.9, 0.12, 0, 0, 0, inspectScreen.material, "inspect-face");
-  part(inspectPanel, "box", 7.9, 5.2, 0.06, 0, 0, -0.06, materialFor("#38444c"));
-
-  interface InspectState {
-    diagram: SpaceDiagram;
-    lay: DiagramLayout;
-    playing: boolean;
-    step: number;
-    steps: number;
-    t: number;
-    redrawAt: number;
-  }
-  let inspectState: InspectState | null = null;
   const stageDepth = -5000;
   interface GraphStage {
     root: pc.Entity;
@@ -1876,7 +1745,7 @@ export function createSpaceViewer(
     part(root, "box", width, height, 0.012, node.x, y, z + 0.036, screen.material, "node-nameplate");
   }
 
-  function addEntityTablePlate(root: pc.Entity, node: SpatialNode, fields: SpaceDiagramField[], textures: Screen[]): void {
+  function addEntityTablePlate(root: pc.Entity, node: SpatialNode, fields: SpaceDiagramField[], textures: Screen[], types = false): void {
     const width = node.width * 0.93;
     const depth = node.depth * 0.93;
     const screen = makeScreen(512, Math.round(512 * depth / width), true, textures);
@@ -1910,7 +1779,8 @@ export function createSpaceViewer(
     if (!fields.length || fields.length > 6) {
       ctx.font = `620 ${Math.min(25, rowHeight * 0.63)}px system-ui, sans-serif`;
       ctx.fillStyle = "#465651";
-      ctx.fillText(fields.length ? `+${fields.length - 5} fields · select entity` : "Entity overview", pad,
+      ctx.fillText(fields.length ? `+${fields.length - 5} ${types ? "members · select type" : "fields · select entity"}`
+        : types ? "Type overview" : "Entity overview", pad,
         plate.height - rowHeight / 2, plate.width - pad * 2);
     }
     screen.material.useLighting = false;
@@ -1977,10 +1847,10 @@ export function createSpaceViewer(
       );
     const labels: LabelPoint[] = [];
     const targets: GraphStage["targets"] = new Map();
-    const entityMap = diagram?.kind === "erd";
+    const entityMap = diagram?.kind === "erd" || diagram?.kind === "class";
     const entityFields = entityMap ? new Map(diagram.nodes.map(({ id, fields }) => [id, fields ?? []])) : undefined;
     for (const node of nodes) {
-      if (entityFields) addEntityTablePlate(root, node, entityFields.get(node.id) ?? [], textures);
+      if (entityFields) addEntityTablePlate(root, node, entityFields.get(node.id) ?? [], textures, diagram?.kind === "class");
       else if (node.y === undefined && diagram?.kind !== "matrix") addGraphNameplate(root, node, textures);
       const ref = `stage:${id}:node:${node.id}`;
       labels.push({
@@ -2157,79 +2027,31 @@ export function createSpaceViewer(
     emitReplay();
   }
 
-  const emitInspect = (): void => {
-    cb.onInspect(
-      inspectState
-        ? {
-            diagramId: inspectState.diagram.id,
-            title: inspectState.diagram.title,
-            kind: inspectState.diagram.kind,
-            owner: inspectState.diagram.owner,
-            playing: inspectState.playing,
-            step: inspectState.step,
-            steps: inspectState.steps,
-            source: inspectState.diagram.source
-          }
-        : null
-    );
-  };
-
-  const redrawInspect = (): void => {
-    if (!inspectState) return;
-    drawDiagram(inspectScreen, inspectState.diagram, inspectState.lay, inspectState.step, inspectState.t);
-    uploadScreen(inspectScreen);
-  };
-
   const diagramForBuilding = (buildingId: string): SpaceDiagram | undefined =>
     space.diagrams.find((d) => d.owner === buildingId && d.kind === "graph") ??
     space.diagrams.find((d) => d.owner === buildingId) ??
     space.diagrams.find((d) => d.owner.startsWith(`${buildingId}:`));
 
-  function openDiagramPanel(diagram: SpaceDiagram, x: number, z: number): void {
+  /** Every diagram kind opens on the walkable stage. */
+  function openDiagramPanel(diagram: SpaceDiagram): void {
     const lay = layout.diagrams[diagram.id];
     if (!lay) return;
-    if (diagram.kind === "graph" || diagram.kind === "sequence" || diagram.kind === "state" || diagram.kind === "matrix" || diagram.kind === "erd") {
-      const graph = diagram.kind === "sequence" ? spatialSequence(diagram) : spatialDiagram(diagram, lay);
-      openGraphStage(`diagram:${diagram.id}`, diagram.title, graph.nodes, graph.edges, diagram);
-      emitSpatialDiagram();
-      return;
-    }
-    closeGraphStage();
-    const order = playbackOrder(diagram, lay);
-    inspectState = {
-      diagram,
-      lay,
-      playing: false,
-      step: -1,
-      steps: order.ids.length,
-      t: 0,
-      redrawAt: 0
-    };
-    inspectPanel.setPosition(x, 4.2, z);
-    inspectPanel.enabled = true;
-    redrawInspect();
-    emitInspect();
+    const graph = diagram.kind === "sequence" ? spatialSequence(diagram) : spatialDiagram(diagram, lay);
+    openGraphStage(`diagram:${diagram.id}`, diagram.title, graph.nodes, graph.edges, diagram);
+    emitSpatialDiagram();
   }
 
   function openInspect(buildingId: string): void {
     const lb = lBuildingById.get(buildingId);
     const diagram = diagramForBuilding(buildingId);
     if (!lb || !diagram) return;
-    if (activeInteriorId === buildingId) {
-      openDiagramPanel(diagram, charX + Math.sin(camYaw) * 4, charZ + Math.cos(camYaw) * 4);
-      return;
-    }
-    const px = lb.pos.x + lb.doorDir.x * (lb.size.w / 2 + 5);
-    const pz = lb.pos.z + lb.doorDir.z * (lb.size.d / 2 + 5);
-    applyShotAngle(buildingId);
-    openDiagramPanel(diagram, px, pz);
+    if (activeInteriorId !== buildingId) applyShotAngle(buildingId);
+    openDiagramPanel(diagram);
   }
 
   function closeInspect(): void {
     closeGraphStage();
-    inspectPanel.enabled = false;
-    inspectState = null;
-    emitInspect();
+    cb.onInspect(null);
   }
 
   // --- interiors -----------------------------------------------------------------------
@@ -2582,6 +2404,66 @@ export function createSpaceViewer(
       });
     }
 
+    // Reading corner on the free wall: shelves, a table and chairs that open the documents.
+    // `solid` is the footprint in room axes; a long model is turned to lie along the named axis.
+    const furnish = (name: string, role: string, size: number, x: number, z: number, facing: number | "along-x" | "along-z",
+      solid: { w: number; d: number; h: number }, fallback: (entity: pc.Entity) => void): void => {
+      const entity = new pc.Entity(name);
+      entity.setPosition(x, 0, z);
+      root.addChild(entity);
+      fallback(entity);
+      if (assets?.has(role)) {
+        mountContainer(packAsset(role), entity, size, 0, childrenOf(entity), typeof facing === "number" ? { yaw: facing }
+          : { chooseYaw: (w, d) => (w >= d) === (facing === "along-x") ? 0 : 90 });
+      }
+      addSolid(world, originX + x, z, solid.w, solid.d, solid.h, name);
+      addContactShadow(root, x + 0.1, z + 0.1, solid.w + 0.5, solid.d + 0.5);
+    };
+    const readingZ = lob.rect.z + lob.rect.d * 0.55;
+    const wallX = lob.rect.x;
+    if (lob.rect.w >= 20 && Math.abs(receptionX - (wallX + 3.2)) > 3.4) {
+      for (const offset of [-1.15, 1.15]) {
+        furnish("bookshelf", "bookshelf", 2.2, wallX + 0.52, readingZ + offset, "along-z", { w: 0.5, d: 1.25, h: 2.2 }, (shelf) => {
+          part(shelf, "box", 0.42, 2.1, 1.2, 0, 1.05, 0, wood);
+          for (const y of [0.45, 0.95, 1.45]) part(shelf, "box", 0.3, 0.28, 1.06, 0.08, y, 0, materialFor("#6f9c93"));
+        });
+      }
+      furnish("reading-table", "table-long", 2.6, wallX + 3.25, readingZ, "along-z", { w: 1.1, d: 2.6, h: 0.78 }, (table) => {
+        part(table, "box", 1, 0.08, 2.5, 0, 0.74, 0, wood);
+        for (const end of [-1.1, 1.1]) part(table, "box", 0.8, 0.7, 0.1, 0, 0.35, end, frame);
+      });
+      for (const offset of [-0.7, 0.7]) {
+        furnish("reading-chair", "chair", 0.95, wallX + 4.45, readingZ + offset, -90, { w: 0.5, d: 0.5, h: 0.9 }, (chair) => {
+          part(chair, "box", 0.45, 0.07, 0.45, 0, 0.46, 0, wood);
+          part(chair, "box", 0.06, 0.45, 0.45, 0.2, 0.72, 0, wood);
+        });
+      }
+      interactables.push({
+        world, x: wallX + 3.25, z: readingZ, radius: 2.1,
+        focus: { kind: "directory", ref: `directory:${buildingId}:docs:reading`, title: "Reading corner", hint: "open docs",
+          source: coveredDoc ? { path: coveredDoc.doc } : undefined, sourcePath: coveredDoc?.doc },
+        action: () => cb.onOpenDirectory?.("docs")
+      });
+    }
+    // A standing directory by the elevator when there are floors to choose from.
+    if (interior.floors.length) {
+      furnish("floor-directory", "floor-sign", 1.8, lob.elevator.x + 2.5, lob.elevator.z - 0.75, "along-x", { w: 0.8, d: 0.45, h: 1.8 }, (sign) => {
+        part(sign, "box", 0.7, 1.5, 0.08, 0, 0.95, 0, materialFor("#2f3d3a"));
+        part(sign, "box", 0.8, 0.12, 0.4, 0, 0.06, 0, frame);
+      });
+    }
+    // The learning stop keeps its trophy beside the plaque when this building has questions.
+    if (question) {
+      const trophyZ = directoryZ + 1.5 * 2.03;
+      part(root, "box", 0.46, 0.6, 0.46, side - 0.72, 0.3, trophyZ, materialFor("#cfc8ba"));
+      addSolid(world, originX + side - 0.72, trophyZ, 0.46, 0.46, 0.6, "learning plinth");
+      const trophy = new pc.Entity("learning-trophy");
+      trophy.setPosition(side - 0.72, 0.6, trophyZ);
+      root.addChild(trophy);
+      part(trophy, "cylinder", 0.26, 0.3, 0.26, 0, 0.15, 0, materialFor("#c9a44a", DAY.amber, 0.3));
+      mountPack(trophy, "trophy", 0.48, 0, childrenOf(trophy));
+    }
+
     // Elevator.
     const elev = new pc.Entity("elevator");
     elev.setPosition(lob.elevator.x, 0, lob.elevator.z);
@@ -2691,14 +2573,18 @@ export function createSpaceViewer(
             source: diagram.source,
             hint: "open diagram"
           },
-          action: () => openDiagramPanel(diagram, originX + fx + panel.pos.x * 0.5, z)
+          action: () => openDiagramPanel(diagram)
         });
       }
       for (const st of lf.infoStands) {
-        const x = fx + st.pos.x;
-        part(root, "box", 0.20, 0.97, 0.20, x, 0.49, st.pos.z, wood);
-        const top = part(root, "box", 1.4, 0.075, 0.60, x, 1.01, st.pos.z, materialFor("#d1ded2", "#dce7d9", 0.18));
-        top.setLocalEulerAngles(-19, st.rot * 180 / Math.PI, 0);
+        const stand = new pc.Entity("info-stand");
+        stand.setPosition(fx + st.pos.x, 0, st.pos.z);
+        stand.setLocalEulerAngles(0, st.rot * 180 / Math.PI, 0);
+        root.addChild(stand);
+        part(stand, "box", 0.20, 0.97, 0.20, 0, 0.49, 0, wood);
+        const top = part(stand, "box", 1.4, 0.075, 0.60, 0, 1.01, 0, materialFor("#d1ded2", "#dce7d9", 0.18));
+        top.setLocalEulerAngles(-19, 0, 0);
+        mountPack(stand, "info-stand", 1.7, 0, childrenOf(stand));
       }
       lf.corridorDoors.forEach((cd) => {
         const f = flowById.get(cd.flowId);
@@ -2866,6 +2752,12 @@ export function createSpaceViewer(
         part(gRoot, "box", 0.3, 1.6, 0.3, -1.6, 0.8, 0, materialFor(DAY.metal));
         part(gRoot, "box", 0.3, 1.6, 0.3, 1.6, 0.8, 0, materialFor(DAY.metal));
         const bar = part(gRoot, "box", 3.1, 0.18, 0.18, 0, 1.1, 0, materialFor("#5a4420", DAY.amber, 0.8), "bar");
+        const packGate = Boolean(assets?.has("gate-checkpoint"));
+        if (packGate) {
+          // The barrier spans the walkway whichever way the model was authored.
+          mountContainer(packAsset("gate-checkpoint"), gRoot, 3.3, 0, childrenOf(gRoot),
+            { chooseYaw: (w, d) => w >= d ? 0 : 90, fit: { w: 3.3, h: 1.6, d: 1.2 } });
+        }
         const gateSolid = addSolid(world, originX + gx, gz, 3.16, 0.18, 1.19, "branch gate");
         const condition = cor.forks[gt.beforeForkIndex]?.condition ?? "checkpoint";
         interactables.push({
@@ -2877,6 +2769,11 @@ export function createSpaceViewer(
           action: () => {
             bar.setLocalEulerAngles(0, 0, 80);
             bar.setLocalPosition(1.45, 1.7, 0);
+            // The pack model is one piece, so an opened gate swings aside along the walkway.
+            if (packGate) {
+              gRoot.setLocalEulerAngles(0, 90, 0);
+              gRoot.setLocalPosition(gx + 1.75, 0, gz + 1.6);
+            }
             gateSolid.active = false;
           },
           entity: gRoot
@@ -3611,7 +3508,7 @@ export function createSpaceViewer(
       const split = diagram.owner.indexOf(":");
       if (split > 0 && interiorByBuilding.has(diagram.owner.slice(0, split))) {
         gotoFloor(diagram.owner.slice(0, split), diagram.owner.slice(split + 1));
-        openDiagramPanel(diagram, charX + Math.sin(camYaw) * 5, charZ + Math.cos(camYaw) * 5);
+        openDiagramPanel(diagram);
         return;
       }
       if (diagram.owner !== "city" && buildingById.has(diagram.owner)) {
@@ -3625,12 +3522,12 @@ export function createSpaceViewer(
             lb.pos.z
           );
         }
-        openDiagramPanel(diagram, charX + Math.sin(camYaw) * 5, charZ + Math.cos(camYaw) * 5);
+        openDiagramPanel(diagram);
       } else {
         if (mode === "interior") exitInterior();
         const p = layout.city.plaza.pos;
         teleportChar(p.x, p.z + 6, p.x, p.z - 6);
-        openDiagramPanel(diagram, p.x, p.z - 4);
+        openDiagramPanel(diagram);
       }
       return;
     }
@@ -3844,7 +3741,6 @@ export function createSpaceViewer(
       return;
     }
     if (e.code === "KeyE" && !e.repeat) activate();
-    if (e.code === "Escape" && inspectState) closeInspect();
     if (e.code === "Space" && !e.repeat && !bird && charY <= 0.001 && !vy && !document.activeElement?.matches("button,a,summary")) {
       e.preventDefault();
       vy = jumpSpeed;
@@ -3946,8 +3842,14 @@ export function createSpaceViewer(
     if (kb) {
       if (kb.isPressed(pc.KEY_W) || kb.isPressed(pc.KEY_UP)) mz += 1;
       if (kb.isPressed(pc.KEY_S) || kb.isPressed(pc.KEY_DOWN)) mz -= 1;
-      if (kb.isPressed(pc.KEY_D) || kb.isPressed(pc.KEY_RIGHT)) mx += 1;
-      if (kb.isPressed(pc.KEY_A) || kb.isPressed(pc.KEY_LEFT)) mx -= 1;
+      if (kb.isPressed(pc.KEY_D)) mx += 1;
+      if (kb.isPressed(pc.KEY_A)) mx -= 1;
+      // The left and right arrows turn the view, so the city can be explored without a mouse.
+      const turn = Number(kb.isPressed(pc.KEY_LEFT)) - Number(kb.isPressed(pc.KEY_RIGHT));
+      if (turn) {
+        camYaw += turn * motionDt * 1.9;
+        arrivalActive = false;
+      }
     }
     const moving = mx !== 0 || mz !== 0;
     if (moving || autoTarget || vy !== 0) arrivalActive = false;
@@ -4263,24 +4165,6 @@ export function createSpaceViewer(
       contactShadow.enabled = avatarVisible;
     }
 
-    // inspect panel: billboard + playback
-    if (inspectState && inspectPanel.enabled) {
-      const pp = inspectPanel.getPosition();
-      inspectPanel.lookAt(cx, pp.y, cz);
-      if (inspectState.playing) {
-        inspectState.t += dt * 0.6;
-        if (inspectState.t >= 1) {
-          inspectState.t = 0;
-          inspectState.step = (inspectState.step + 1) % inspectState.steps;
-          emitInspect();
-        }
-        if (elapsed - inspectState.redrawAt > 0.1) {
-          inspectState.redrawAt = elapsed;
-          redrawInspect();
-        }
-      }
-    }
-
     // focus
     if (!graphStage && !bird) {
       let best: Interactable | null = null;
@@ -4594,23 +4478,13 @@ export function createSpaceViewer(
           sequence.progress = sequence.progress >= 1 ? 0 : sequence.progress;
           sequence.playing = true;
           emitSpatialDiagram();
-          return;
         }
-        if (!inspectState) return;
-        inspectState.playing = true;
-        if (inspectState.step < 0) inspectState.step = 0;
-        redrawInspect();
-        emitInspect();
       },
       pause: () => {
         if (graphStage?.sequence) {
           graphStage.sequence.playing = false;
           emitSpatialDiagram();
-          return;
         }
-        if (!inspectState) return;
-        inspectState.playing = false;
-        emitInspect();
       },
       step: (dir) => {
         const sequence = graphStage?.sequence;
@@ -4619,14 +4493,7 @@ export function createSpaceViewer(
           sequence.progress = 1;
           sequence.playing = false;
           emitSpatialDiagram();
-          return;
         }
-        if (!inspectState) return;
-        inspectState.playing = false;
-        inspectState.step = Math.max(0, Math.min(inspectState.steps - 1, (inspectState.step < 0 ? 0 : inspectState.step) + dir));
-        inspectState.t = 0.5;
-        redrawInspect();
-        emitInspect();
       },
       fit: () => {
         if (!graphStage) return;

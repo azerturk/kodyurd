@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { createWorkspaceIgnoreCheck, isPrivateWorkspaceFile, type AnalyzerReport, type DocInfo, type DocSection, type ModuleSummary } from "./analyzer.js";
 import type { TClaimEvidence, TDiagramClaim, TSpaceDocument } from "@kodyurd/scene-schema";
 import type { FocusKind } from "./focus-generation.js";
+import { declarationLine } from "./source-declarations.js";
+import { isDocumentPath, isTestPath } from "./source-paths.js";
 
 const MAX_SOURCE_BYTES = 1024 * 1024;
 
@@ -68,7 +70,7 @@ export interface EvidenceExcerpt {
   id?: string;
 }
 
-const documentationExtension = /^(?:\.(?:md|mdx|rst|adoc|txt|json|ya?ml|toml|svg|png|jpe?g|webp|gif|pdf)|\(none\))$/i;
+const documentationExtension = /^(?:\.(?:md|markdown|mdx|rst|adoc|asciidoc|txt|json|ya?ml|toml|svg|png|jpe?g|webp|gif|pdf)|\(none\))$/i;
 
 function ownsFile(report: AnalyzerReport, moduleRef: string, file: string): boolean {
   if (!file.includes("/")) return moduleRef === "(root)";
@@ -195,7 +197,7 @@ export async function collectBuildingEvidence(
   const code: EvidenceExcerpt[] = [];
   const entries = new Set(mod?.entryFiles ?? []);
   const mentioned = snippets.map((excerpt) => excerpt.text).join("\n").toLowerCase();
-  const ranked = files.filter((file) => !/\.(?:md|css|svg|json)$/i.test(file))
+  const ranked = files.filter((file) => !/\.(?:css|svg|json)$/i.test(file) && !isDocumentPath(file))
     .map((file) => {
       const basename = path.posix.basename(file, path.posix.extname(file));
       const signal = basename.length >= 7 && mentioned.includes(basename.toLowerCase()) ? 5 : 0;
@@ -205,7 +207,7 @@ export async function collectBuildingEvidence(
   for (const { file } of ranked.slice(0, focused ? 8 : 3)) {
     const lines = await read(file);
     if (!lines) continue;
-    const entry = lines.findIndex((line) => /\b(?:function|def|class|router|route)\b/i.test(line));
+    const entry = declarationLine(file, lines);
     const openingLine = Math.max(1, entry - 3);
     const startLine = focused ? focusedSourceLine(lines, terms, openingLine) : openingLine;
     const excerpt = makeExcerpt(file, lines, { kind: "code", startLine, endLine: startLine + 119 });
@@ -226,6 +228,10 @@ export function compactLessonEvidence(
     if (kind === "map") return /^\s*(?:flowchart|graph|classDiagram|C4Context|C4Container|C4Component)\b/m.test(excerpt.text);
     if (kind === "sequence") return /^\s*sequenceDiagram\b/m.test(excerpt.text);
     if (kind === "state") return /^\s*stateDiagram(?:-v2)?\b/m.test(excerpt.text);
+    if (kind === "erd") return /^\s*erDiagram\b/m.test(excerpt.text);
+    if (kind === "class") return /^\s*classDiagram\b/m.test(excerpt.text);
+    if (kind === "mindmap") return /^\s*mindmap\b/m.test(excerpt.text);
+    if (kind === "context") return /^\s*C4(?:Context|Container|Deployment)\b/m.test(excerpt.text);
     return false;
   });
   const docs = architecture ? evidence.docs.filter((excerpt) => excerpt !== architecture) : evidence.docs;
@@ -479,10 +485,16 @@ export async function collectGuideEvidence(
     files.set(file, Math.max(files.get(file) ?? 0, weight + scoreTerms(file, terms) * 5 + (named ? 20 : 0)));
   };
   for (const file of anchorPaths) offer(file, 25);
-  for (const file of [...anchorPaths].filter((candidate) => /\.md$/i.test(candidate)).slice(0, 3)) {
+  for (const file of [...anchorPaths].filter(isDocumentPath).slice(0, 3)) {
     const lines = await read(file);
     if (!lines) continue;
-    const links = lines.slice(0, 400).join("\n").matchAll(/\[[^\]\n]{1,180}\]\(([^)\s#]{1,250})(?:#[^)]*)?\)/g);
+    const head = lines.slice(0, 400).join("\n");
+    // Markdown links, AsciiDoc link: and xref: macros, and reStructuredText `text <target>`_ references.
+    const links = [
+      ...head.matchAll(/\[[^\]\n]{1,180}\]\(([^)\s#]{1,250})(?:#[^)]*)?\)/g),
+      ...head.matchAll(/(?:link|xref):([^\s[#]{1,250})(?:#[^[\s]*)?\[/g),
+      ...head.matchAll(/`[^`<\n]{0,180}<([^>\s#]{1,250})(?:#[^>]*)?>`_/g)
+    ];
     for (const [, href] of links) {
       const linked = path.posix.normalize(path.posix.join(path.posix.dirname(file), href));
       if (path.posix.isAbsolute(href) || !indexedCode.has(linked) || !allowedEvidencePath(linked) || claimEvidenceKind(linked) !== "code") continue;
@@ -578,8 +590,8 @@ export async function verifiedSourceRef(source: SourceRef, read: SourceReader): 
 const exactClaimText = (value: string): string => value.normalize("NFKC").replace(/\s+/g, " ").trim();
 
 function claimEvidenceKind(file: string): TClaimEvidence["kind"] {
-  if (/\.(?:md|mdx|rst|adoc|txt)$/i.test(file)) return "docs";
-  if (/(?:^|[/_.-])(?:tests?|specs?)(?:[/_.-]|$)/i.test(file)) return "test";
+  if (isDocumentPath(file) || /\.txt$/i.test(file)) return "docs";
+  if (isTestPath(file)) return "test";
   return "code";
 }
 

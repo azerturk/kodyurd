@@ -31,6 +31,9 @@ narrow scope. Simple work is rejected.
 | Ordered steps with branches, or longer | a flow with branches → a walkable corridor + its panel |
 | Structure / relations (components, deps, layers) | a diagram: graph, sequence or stack |
 | Data entities, typed fields and evidenced relationship cardinalities | an ERD with sourced entities, fields and relationships |
+| Declared types, their members and inheritance or ownership | a class diagram |
+| A subject and its nested topics | a mind map with one root |
+| People, neighbouring systems, stores and where parts run | a graph grouped by boundary |
 | A tabular mapping (X → Y → Z columns) | a matrix diagram |
 | History / changelog / roadmap | a timeline diagram |
 | Prose rules, conventions, rationale | lobby catalog + info-stand summary + reading excerpt |

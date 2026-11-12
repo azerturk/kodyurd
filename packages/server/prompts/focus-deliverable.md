@@ -57,7 +57,7 @@ existing step IDs for shared paths and bounded retries. Use an empty array for a
 non-applicable deliverable. Omit a node, edge or step when you cannot cite it.
 
 - Diagram: `{id,owner,title,kind,nodes,edges,note?,source?,origin?,claims?}`. `owner` must be
-  "{{BUILDING_ID}}". Node `{id,label,group?,icon?,hint?,source}` and edge
+  "{{BUILDING_ID}}". Node `{id,label,group?,icon?,hint?,fields?,source}` and edge
   `{id,from,to,label?,guard?,kind?,source}` IDs must be unique in that diagram.
   A component map uses `kind:"graph"` and includes at least two nodes and one
   directed edge. Each edge's `from` and `to` must match node IDs in that graph.

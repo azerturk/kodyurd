@@ -507,6 +507,13 @@
       "license": "tripo-paid-tos-5.2.2"
     },
     {
+      "role": "lesson-banner",
+      "file": "models/lesson-banner.glb",
+      "bytes": 1919652,
+      "sha256": "55024ef8f9050faa9f3c43c45f78848452cfb74435b17e151b0614f02ddb9dd6",
+      "license": "tripo-paid-tos-5.2.2"
+    },
+    {
       "role": "lobby-plant",
       "file": "models/lobby-plant.glb",
       "bytes": 2548592,

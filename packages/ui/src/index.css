@@ -345,6 +345,7 @@ body {
 .studio-overlay-row > div, .studio-overlay-prompt { min-width: 0; overflow-wrap: anywhere; }
 .studio-overlay-state { margin-inline-start: .45rem; }
 .studio-overlay-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: .4rem; }
+.studio-saved-brief { margin: .25rem 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .studio-overlay-prompt summary { color: var(--studio-teal-ink); font-size: var(--studio-label); font-weight: 660; }
 .studio-overlay-prompt p { margin: 0.22rem 0 0; color: var(--studio-muted); white-space: normal; }
 .studio-deliverables li { display: grid; min-width: 0; justify-items: start; gap: 0.35rem; border: 1px solid var(--studio-line); border-radius: 0.5rem; padding: 0.65rem 0.72rem; background: var(--studio-surface); overflow-wrap: anywhere; }

@@ -1,0 +1,36 @@
+= Identities and access
+
+The `x-harbor-user` header selects a trusted local demo identity. link:../identity/access.mjs[identity/access.mjs] resolves it, and link:../reservations/service.mjs[reservations/service.mjs] applies the cancellation rule. The header is for this demonstration and must not be used for real authentication.
+
+== Demo identities
+
+[%header]
+|===
+|Header value |Name |Role
+|`alice` |Alice |member
+|`bob` |Bob |member
+|`morgan` |Morgan |operator
+|===
+
+A member lists and cancels only their own reservations. An operator lists every owner's reservations and can cancel any of them.
+
+== Cancellation decision
+
+[mermaid]
+....
+flowchart TD
+    request[DELETE /api/reservations/id] --> identity{Known identity?}
+    identity -->|No| unauthorized[401 IDENTITY_REQUIRED]
+    identity -->|Yes| exists{Reservation exists?}
+    exists -->|No| unknown[404 RESERVATION_UNKNOWN]
+    exists -->|Yes| allowed{Owner or operator?}
+    allowed -->|No| denied[403 CANCELLATION_DENIED]
+    allowed -->|Yes| cancelled[200 with the reservation]
+....
+
+== Check a rule by hand
+
+. Start the service with `npm start`.
+. Book a room as Alice.
+. Switch to Bob and try to cancel it. The server answers `403 CANCELLATION_DENIED`.
+. Switch to Morgan and cancel it. The server answers `200`.

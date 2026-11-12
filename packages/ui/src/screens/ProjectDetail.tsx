@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  api, LocalApiError, type AgentId, type AgentInfo, type AnalyzerReport, type GenerationDeliverable,
-  type JobStage, type JobView, type OverlayItem, type Project, type ScanExclusion, type SpaceOffer
+  api, LocalApiError, type AgentId, type AgentInfo, type AnalyzerReport, type JobView, type OverlayItem, type Project,
+  type ScanExclusion, type SpaceOffer
 } from "../api";
+import GenerationPanel, { focusTitle, isRunning } from "./GenerationPanel";
+import SavedCities from "./SavedCities";
 import StudioDialog from "./StudioDialog";
 
 interface EvidenceChanges {
@@ -20,18 +22,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
   en: "English", az: "Azerbaijani", tr: "Turkish", ru: "Russian", es: "Spanish", de: "German"
 };
 
-const DELIVERABLE_LABELS: Record<GenerationDeliverable["state"], string> = {
-  pending: "Pending", running: "Running", ready: "Ready", failed: "Failed", "timed-out": "Timed out"
-};
-
-const PHASES: { id: NonNullable<JobStage["phase"]>; label: string }[] = [
-  { id: "scan", label: "Workspace scan" },
-  { id: "plan", label: "City plan and focus" },
-  { id: "content", label: "Evidence and content" },
-  { id: "layout", label: "City layout" },
-  { id: "quality", label: "Quality check" }
-];
-
 const SCAN_EXCLUSIONS: Record<ScanExclusion["reason"], string> = {
   "ignore-rule": "Workspace ignore rule",
   generated: "Generated output or local database",
@@ -40,20 +30,13 @@ const SCAN_EXCLUSIONS: Record<ScanExclusion["reason"], string> = {
   unreadable: "Unreadable entry"
 };
 
-const isRunning = (job: JobView | null): boolean =>
-  job?.status === "queued" || job?.status === "running";
-
 const draftKey = (projectId: string): string => `kodyurd:brief:${projectId}`;
 const lessonModuleLine = /^[ \t]*Lesson modules:[ \t]*([^\r\n]*)/im;
+// One focus and up to nine pinned modules fit the ten lessons a job builds.
+const pinnedLessonLimit = 9;
 
 function readDraft(projectId: string): string | null {
   try { return localStorage.getItem(draftKey(projectId)); } catch { return null; }
-}
-
-function focusTitle(title: string | undefined): string {
-  if (!title) return "Workspace";
-  if (!/^b-[a-z0-9]+(?:[-_.][a-z0-9]+)*$/.test(title)) return title;
-  return title.slice(2).split(/[-_.]/).map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
 }
 
 function ScanDetails({ report }: { report: AnalyzerReport }) {
@@ -78,146 +61,6 @@ function ScanDetails({ report }: { report: AnalyzerReport }) {
         ))}
       </ul>}
     </details>
-  );
-}
-
-function GenerationPanel({ job, busy, onRetry, onPreview }: {
-  job: JobView;
-  busy: boolean;
-  onRetry: (deliverableId: string) => void;
-  onPreview: (artifact?: string) => void;
-}) {
-  const running = isRunning(job);
-  const focused = job.stages.filter((stage) => stage.focus);
-  const focusBuilding = focused.at(-1)?.building ?? job.quality?.focusBuilding;
-  const focusStages = focused.length ? focused : job.stages.filter((stage) => stage.building && stage.building === focusBuilding);
-  const latestFirst = [...job.stages].reverse();
-  const focusLatestFirst = [...focusStages].reverse();
-  const evidence = focusLatestFirst.find((stage) => stage.evidence?.length)?.evidence ?? [];
-  const outputs = focusLatestFirst.find((stage) => stage.outputs?.length)?.outputs ?? [];
-  const lastPhase = latestFirst.find((stage) => stage.phase)?.phase;
-  const deliverables = job.deliverables ?? [];
-  const status = job.focusReady ? "ready" : job.quality?.status ?? job.status;
-  return (
-    <>
-      <div className="studio-grid studio-job-grid">
-        <section className="studio-panel" aria-label="Generation progress">
-          <div className="studio-section-title">
-            <h2>{job.kind === "space" ? "Generation job" : "Personal model"}</h2>
-            <span className={`studio-status studio-status-${status}`}>
-              {job.focusReady ? "Focus ready" : job.quality?.status === "partial" ? "Partial" : job.quality?.status === "pending" ? "Focus pending"
-                : running ? "Running" : job.status === "done" ? "Complete"
-                  : job.status === "interrupted" ? "Interrupted" : "Failed"}
-            </span>
-          </div>
-          {job.kind === "space" && (
-            <ol className="studio-steps">
-              {PHASES.map(({ id, label }) => {
-                const stage = latestFirst.find((entry) => entry.phase === id);
-                const active = running && stage && lastPhase === id;
-                const complete = stage?.state === "ready" || stage?.state === "cached"
-                  || (stage && !active && job.status === "done" && stage.state !== "pending");
-                const state = active ? "active" : complete ? "complete" : stage?.state === "pending" ? "pending" : "waiting";
-                return (
-                  <li key={id} data-state={state} aria-current={active ? "step" : undefined}>
-                    <span className="studio-step-dot" aria-hidden="true">{complete ? "✓" : ""}</span>
-                    <div>
-                      <strong>{label}</strong>
-                      {stage && <small>{stage.text}</small>}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          {job.status === "interrupted" && (
-            <p className="studio-muted">The local app stopped during this run. Generate again to continue with cached work.</p>
-          )}
-          {job.quality?.keptPrevious && <p className="studio-muted">Your previous city is still available while the new focus is incomplete.</p>}
-          {job.focusReady && running && <p className="studio-ok">The focus is ready to open. City overview work is continuing.</p>}
-          {job.error && <p role="alert" className="studio-alert">{job.error.message}</p>}
-        </section>
-        <section className="studio-panel studio-job-focus" aria-label="Selected evidence">
-          <p className="studio-eyebrow">Focus and evidence</p>
-          <h2>{focusTitle(focusBuilding)}</h2>
-          {job.focusReady && <p className="studio-job-ready"><span aria-hidden="true">✓</span> The focus lesson is available.</p>}
-          {job.quality && (
-            <div className="studio-quality" aria-label="Generation quality">
-              <div><strong>{job.quality.sourceCount}</strong><small>Checked citations</small></div>
-              <div><strong>{job.quality.playableFlowCount}</strong><small>Playable flows</small></div>
-              <div><strong>{job.quality.droppedSourceCount}</strong><small>Invalid refs</small></div>
-            </div>
-          )}
-          {deliverables.length > 0 && (
-            <ul className="studio-deliverables">
-              {deliverables.map((item) => {
-                const interrupted = job.status === "interrupted" && item.state === "running";
-                const retryable = !running && item.state !== "ready" && (item.state !== "running" || interrupted);
-                const artifact = latestFirst.find((stage) => stage.deliverableId === item.id && stage.outputs?.length)?.outputs
-                  ?.find((output) => output.kind === (item.kind === "scenario" ? "flow" : "diagram"))?.ref;
-                return (
-                  <li key={item.id} data-state={interrupted ? "interrupted" : item.state}>
-                    <div className="studio-deliverable-title">
-                      <strong>{item.title}</strong>
-                      <span className={`studio-status studio-status-${interrupted ? "interrupted" : item.state}`}>
-                        {interrupted ? "Interrupted" : DELIVERABLE_LABELS[item.state]}
-                      </span>
-                    </div>
-                    {item.error && <p className="studio-muted">{item.error}</p>}
-                    {item.reference && <small className="studio-muted">Visual reference · {item.reference}</small>}
-                    {item.state === "ready" && job.draftAvailable && artifact && <button className="studio-button studio-small" type="button"
-                      onClick={() => onPreview(artifact)}>Open {item.title.toLowerCase()} ↗</button>}
-                    {retryable && <button className="studio-button studio-small" type="button"
-                      onClick={() => onRetry(item.id)} disabled={busy}>Retry {item.title.toLowerCase()}</button>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {evidence.length > 0 && (
-            <details className="studio-job-sources">
-              <summary>Selected sources <span>{evidence.length}</span></summary>
-              <ul className="studio-evidence">
-                {evidence.map((source) => <li key={source} translate="no">{source}</li>)}
-              </ul>
-            </details>
-          )}
-          {deliverables.length === 0 && outputs.length > 0 && (
-            <>
-              <h3>Generated outputs</h3>
-              <ul className="studio-outputs">
-                {outputs.map((output, index) => (
-                  <li key={output.ref ?? `${output.kind}:${index}`}>
-                    <span className="studio-check" aria-hidden="true">✓</span>
-                    <span>{output.title}</span>
-                    <small>{output.kind === "diagram" ? "Diagram" : "Flow"}</small>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {evidence.length === 0 && outputs.length === 0 && deliverables.length === 0 && (
-            <p className="studio-muted">{running ? "Selected sources and outputs appear as the agent works." : "No focus details were recorded for this run."}</p>
-          )}
-          {!!job.quality?.issues.length && (
-            <ul className="studio-issues">{job.quality.issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>
-          )}
-          {job.draftAvailable && !job.focusReady && (
-            <button className="studio-button studio-preview" type="button" onClick={() => onPreview()}>Preview draft</button>
-          )}
-        </section>
-      </div>
-      <details className="studio-panel studio-disclosure" open={lastPhase ? undefined : true}>
-        <summary>Activity <span>{job.stages.length} updates</span></summary>
-        <ol className="studio-log">
-          {job.stages.map((stage, index) => (
-            <li key={`${stage.at}:${index}`}>
-              <time dateTime={stage.at}>{new Date(stage.at).toLocaleTimeString()}</time><span>{stage.text}</span>
-            </li>
-          ))}
-        </ol>
-      </details>
-    </>
   );
 }
 
@@ -369,7 +212,7 @@ export default function ProjectDetail({
 
   function toggleLessonModule(name: string): void {
     const selected = lessonModules.includes(name);
-    if (!selected && lessonModules.length >= 2) return;
+    if (!selected && lessonModules.length >= pinnedLessonLimit) return;
     const next = selected ? lessonModules.filter((module) => module !== name) : [...lessonModules, name];
     const line = next.length ? `Lesson modules: ${next.join(", ")}` : "";
     const updated = lessonModuleLine.test(brief) ? brief.replace(lessonModuleLine, () => line).trimEnd()
@@ -502,7 +345,8 @@ export default function ProjectDetail({
       {pollError && activeJobId && <p role="status" className="studio-alert">Reconnecting to the local job…</p>}
       {screen === "job" && job ? <GenerationPanel job={job} busy={operationBusy}
         onPreview={(artifact) => onPreview(job.id, artifact)}
-        onRetry={(deliverableId) => start("space", api.retryDeliverable(id, job.id, deliverableId))} /> : (
+        onRetry={(deliverableId) => start("space", api.retryDeliverable(id, job.id, deliverableId))}
+        onContinue={() => start("space", api.continueLessons(id, job.id))} /> : (
         <>
           <div className="studio-panel studio-grid studio-overview studio-scan-overview">
             <div>
@@ -547,7 +391,7 @@ export default function ProjectDetail({
                         <button className="studio-button studio-small" type="button" aria-pressed={module.name === focusModule}
                           onClick={() => setFocusModule(module.name)}>{module.name === focusModule ? "Current focus" : "Set as focus"}</button>
                         <button className="studio-button studio-small" type="button" aria-pressed={lessonModules.includes(module.name)}
-                          disabled={!lessonModules.includes(module.name) && (lessonModules.length >= 2 || module.name === focusModule)}
+                          disabled={!lessonModules.includes(module.name) && (lessonModules.length >= pinnedLessonLimit || module.name === focusModule)}
                           onClick={() => toggleLessonModule(module.name)}>{lessonModules.includes(module.name) ? "Remove lesson" : "Add lesson"}</button>
                       </div>
                     </details>
@@ -572,7 +416,7 @@ export default function ProjectDetail({
                   aria-describedby="studio-brief-lesson-help"
                   placeholder="Who is learning, and what should the city explain in depth?" />
               </label>
-              <p className="studio-muted studio-lesson-help" id="studio-brief-lesson-help">Add up to two companion lessons from the discovered map to include them in this city.</p>
+              <p className="studio-muted studio-lesson-help" id="studio-brief-lesson-help">The brief decides which buildings get a lesson. Pin a module from the discovered map to make sure it is one of them.</p>
               <label className="studio-field">Focus module
                 <select value={focusModule} onChange={(event) => setFocusModule(event.target.value)}>
                   <option value="">Resolve from the brief</option>
@@ -663,6 +507,15 @@ export default function ProjectDetail({
           </ul>
         </details>
       )}
+      {hasSpace && <SavedCities id={id} busy={operationBusy} revision={`${job?.id ?? ""}:${job?.status ?? ""}:${job?.focusReady ? 1 : 0}`}
+        onError={setError} onOpened={(city) => {
+          try { localStorage.removeItem(draftKey(id)); } catch { /* the opened city's brief is stored on the server */ }
+          setBrief(city.brief);
+          setLanguage(city.language);
+          setEvidenceChanges(null);
+          loadOffers();
+          onWalkSpace();
+        }} />}
       {hasSpace && (
         <details className="studio-panel studio-disclosure">
           <summary>Evidence changes</summary>
@@ -699,7 +552,7 @@ export default function ProjectDetail({
           <dl className="studio-review">
             <dt>Workspace</dt><dd>{project?.name}</dd>
             <dt>Focus module</dt><dd>{focusModule || (focusHints.length === 1 ? `${focusHints[0]} · candidate` : "Resolved during generation")}</dd>
-            {!!lessonModules.length && <><dt>Companion lessons</dt><dd>{lessonModules.join(", ")}</dd></>}
+            {!!lessonModules.length && <><dt>Pinned lessons</dt><dd>{lessonModules.join(", ")}</dd></>}
             <dt>Language</dt><dd>{LANGUAGE_LABELS[language] ?? language}</dd>
             <dt>Agent</dt><dd>{AGENT_LABELS[selectedAgent]}</dd>
             <dt>Model</dt><dd>{model.trim() || "Agent default"}</dd>

@@ -5,8 +5,8 @@ The schema is the **security boundary**: runtime agents output only this JSON, a
 `parseScene` (zod) is the gate. Nothing an agent writes may ever become code.
 
 > **Current shape: v0.2 "Space"** (`src/space.ts`) — ONE knowledge city
-> (no `sceneType`), plus `interiors`, richer `diagrams` (graph/sequence/state/matrix/ERD,
-> icon roles from the asset registry) and bounded `presentation` tokens (accents,
+> (no `sceneType`), plus `interiors`, richer `diagrams` (graph/sequence/state/stack/
+> timeline/matrix/ERD/class/mindmap, icon roles from the asset registry) and bounded `presentation` tokens (accents,
 > panel variants, camera shots). See the [architecture overview](../ARCHITECTURE.md).
 > Generation writes v0.2. `parseSpace` accepts v0.1 documents through
 > `upgradeSceneToSpace`.
@@ -44,6 +44,26 @@ The schema is the **security boundary**: runtime agents output only this JSON, a
   or `UK` keys and exact sources. Each relationship has `cardinality: { from, to }`
   with `1`, `0..1`, `1..*`, or `0..*` at each end. The authored Mermaid importer
   keeps only fully supported blocks and preserves their line references.
+- A class diagram uses `kind: "class"`. Type nodes list members in the same
+  `fields` shape without keys; a method is written `name(params)` with its
+  result as the type. Relationships are labelled `extends`, `implements`,
+  `owns`, `has` or `uses`, with `dashed` for realization and dependency, and
+  may carry a cardinality.
+- A mind map uses `kind: "mindmap"`: one root and a parent-to-child edge for
+  every other topic. The layout places the root at the centre and each level
+  on its own ring.
+- `stack` layers and `timeline` entries keep their authored order. A timeline
+  without edges is read as one chain. System context, container and deployment
+  views are `graph` diagrams whose nodes name their boundary in `group`.
+- `origin: "user"` marks a diagram the user corrected, imported or drew. Agents never emit it:
+  the agent normalizer accepts only `docs`, `code` and `mermaid`. User diagrams live in
+  `projects/<id>/diagram-edits.json`, pass the same `SpaceDiagram` gate, and are laid over the
+  saved city on read; a matching id replaces the generated diagram. An item the user kept holds
+  the source the saved diagram had for that id, anything added has none, and claims come only
+  from the saved diagram.
+- The Mermaid importer reads `flowchart`/`graph`, `sequenceDiagram`,
+  `stateDiagram`, `erDiagram`, `classDiagram`, C4 diagrams, `mindmap`, `gantt`,
+  `journey` and `timeline` from Markdown, MDX, reStructuredText and AsciiDoc.
 - `assessment.questions` is optional. `choice` and `target` each reference one
   option ID. An `order` answer is a permutation of all option IDs. Every question
   has a source line or range. Optional `building` and `replay` refs resolve in
