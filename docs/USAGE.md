@@ -50,10 +50,10 @@ python3 -m http.server 8000 --bind 127.0.0.1 --directory /path/to/extracted-expo
 In a second terminal, publish that static server with a new Connector ID for this review. The example uses `kodyurd-review-1`:
 
 ```sh
-qurl publish http://127.0.0.1:8000 --id kodyurd-review-1 --access review
+qurl publish http://127.0.0.1:8000 --id kodyurd-review-1 --access review -o json
 ```
 
-Check that the resource requires approval before sending the printed address to the reviewer. After they request access, check their verified email in `qurl access list_grants <CRID> -o json` and approve the matching decision with `qurl access approve <CRID> <decision-id> --version <version>`. Ask them to return to the access page, click **Open**, and confirm that the city loads. Keep both the static server and the host running during the review.
+Check the JSON for `found_existing: false`, `private: true`, and `consumer_access.mode: review`. If any check fails, stop here. Send `resource_url` to the reviewer. After they request access, check their verified email in `qurl access list_grants <CRID> -o json` and approve the matching decision with `qurl access approve <CRID> <decision-id> --version <version>`. Ask them to return to the access page, click **Open**, and confirm that the city loads. Keep both the static server and the host running during the review.
 
 Point qURL only at the export server. Keep the Kodyurd authoring server on port 4717 local. This optional workflow connects the export to an external service. When the review ends, run `qurl delete <CRID>` to permanently remove the share and stop the static server.
 
