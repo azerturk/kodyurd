@@ -39,6 +39,24 @@ Open the generated city and use **Diagrams** to find the data model, **Replay sc
 
 Choose **Export bundle** from a workspace with a saved city. The ZIP includes the referenced GLBs and visible overlays. Unzip the bundle and serve it with a static HTTP server, such as `python -m http.server` if Python is installed. The extracted bundle retains walking, diagrams, replay and learning. Source reading and Guide Q&A use the local app.
 
+### Share an export with a reviewer
+
+For a private browser review, use the [qURL CLI](https://github.com/layervai/qurl-integrations/releases) with the extracted export. Start with Harbor Desk or an export that you have checked for private scene text, source references, and models. Use a directory that contains only the extracted export.
+
+```sh
+python3 -m http.server 8000 --bind 127.0.0.1 --directory /path/to/extracted-export
+```
+
+In a second terminal, publish that static server:
+
+```sh
+qurl publish http://127.0.0.1:8000 --access review
+```
+
+Send the printed address to the reviewer. After they request access, check their verified email in `qurl access list_grants <CRID> -o json` and approve the matching decision with `qurl access approve <CRID> <decision-id> --version <version>`. Ask them to return to the access page, click **Open**, and confirm that the city loads. Keep both the static server and the host running during the review.
+
+Point qURL only at the export server. Keep the Kodyurd authoring server on port 4717 local. This optional workflow connects the export to an external service. When the review ends, run `qurl delete <CRID>` to permanently remove the share and stop the static server.
+
 ## Troubleshooting
 
 - Use `npm run doctor` to check Node, provider commands and the local environment.
