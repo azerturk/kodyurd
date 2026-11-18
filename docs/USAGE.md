@@ -47,7 +47,7 @@ For a private browser review, use the [qURL CLI](https://github.com/layervai/qur
 python3 -m http.server 8000 --bind 127.0.0.1 --directory /path/to/extracted-export
 ```
 
-In a second terminal, publish that static server with a new Connector ID for this review. The example uses `kodyurd-review-1`:
+In a second terminal, publish that static server with a new local ID for this review. The example uses `kodyurd-review-1`:
 
 ```sh
 qurl publish http://127.0.0.1:8000 --id kodyurd-review-1 --access review -o json
