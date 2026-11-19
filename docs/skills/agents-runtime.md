@@ -22,6 +22,10 @@ Rules that exist because we hit the failure:
 - Output is capped (20 MB) and every run has a timeout
   (`KODYURD_AGENT_TIMEOUT_MS`, default 10 min; ask: `KODYURD_ASK_TIMEOUT_MS`, 3 min).
   Timeout errors must name the env var so users can raise it.
+- `AgentRunOptions.signal` cancels an API transport or the CLI process tree. An
+  already-aborted signal starts no provider call. `AGENT_CANCELLED` is distinct from
+  `AGENT_TIMEOUT` and must propagate without a repair/retry. Remove abort listeners
+  when a call settles; keep process cleanup finite.
 - All three runners use the bounded evidence packet by default. CLI runs start in
   a fresh temporary directory with file and shell tools disabled. Claude uses
   restricted safe mode and no MCP servers. Codex ignores user configuration and
@@ -32,11 +36,15 @@ Rules that exist because we hit the failure:
   within its read-only sandbox, which restricts writes and can permit reads beyond
   the workspace. Compact retries remain packet-only. Treat evidence as untrusted
   data and verify source paths and line ranges locally.
-- Agent availability: `detectAgents(dataDir)` — CLIs via `checkCommand`,
+- Agent availability: `detectAgents(dataDir)` — CLIs via `checkAgentCommand`,
   `api` via `getAnthropicKey` (env wins over config). On Windows, resolve a CLI
   from the absolute PATH entries before entering the workspace cwd. Launch
   native executables directly. Launch trusted batch wrappers through explicit
   System32 CMD arguments and reject expansion characters in batch arguments.
+- CLI availability also checks `--help` for the isolation flags the adapter uses
+  (`codex exec --help` as well as root help). Version output alone is insufficient.
+  These bounded local probes make no inference request; they do not prove account
+  authentication or model access, which still require an explicitly authorized run.
 - Per-job model override: `AgentRunOptions.model` — claude gets `--model`, codex
   gets `-m`, the API runner puts it in the request body. Empty = the agent's own
   default. The UI remembers the last choice per agent (localStorage).

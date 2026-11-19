@@ -3,6 +3,7 @@ import { api, type AskResult, type DocExcerpt } from "../api";
 import type { SpaceAssessmentQuestion, SpaceDiagram, SpaceOverlay, SpacePayload, SpaceSource, SpaceTourStop } from "../space-types";
 import { questionsFor, readProgress, saveProgress } from "./assessment";
 import { cityRelationships } from "./city-relations";
+import { districtStyle, mapDistrictTitle } from "./city-map";
 import { DiagramEditor, EDITABLE_KINDS, starterDiagram } from "./DiagramEditor";
 import { DiagramExplanation } from "./DiagramExplanation";
 import { diagramTitle } from "./diagram-explanation";
@@ -81,9 +82,14 @@ function SpaceViewerAttempt({
   });
   const [inspect, setInspect] = useState<DiagramPlayback | null>(null);
   const [replay, setReplay] = useState<FlowPlayback | null>(null);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [explainId, setExplainId] = useState<string>();
   // The diagram open in the editor, the city revision its saves create, and the diagram to reopen after one.
   const [editing, setEditing] = useState<{ diagram: SpaceDiagram; isNew: boolean } | null>(null);
+  const setHudInert = useCallback((element: HTMLDivElement | null) => {
+    if (element) element.inert = Boolean(editing);
+  }, [editing]);
+  useEffect(() => { setDetailsCollapsed(false); }, [inspect?.diagramId, replay?.flowId]);
   const [revision, setRevision] = useState(0);
   const reopen = useRef<string>();
   const [importText, setImportText] = useState("");
@@ -242,12 +248,12 @@ function SpaceViewerAttempt({
   }, [payload, packRoles, overlays, initialArtifact, offline, error]);
 
   useEffect(() => {
-    handleRef.current?.setInputBlocked(!cityReady || Boolean(drawer || reading || elevator || trophy));
+    handleRef.current?.setInputBlocked(!cityReady || Boolean(drawer || reading || elevator || trophy || editing));
     if (drawer) {
       handleRef.current?.replay.pause();
       handleRef.current?.inspect.pause();
     }
-  }, [cityReady, drawer, reading, elevator, trophy, payload, packRoles, overlays]);
+  }, [cityReady, drawer, reading, elevator, trophy, editing, payload, packRoles, overlays]);
 
   const openReading = useCallback(
     ({ path, from, to, anchor }: DocumentTarget, title?: string, asDocument = false) => {
@@ -352,7 +358,7 @@ function SpaceViewerAttempt({
   // Preserve native keyboard navigation when a UI control owns focus.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!cityReady) return;
+      if (!cityReady || editing) return;
       if (e.code === "Escape") {
         if (reading) closeReading();
         else if (elevator) setElevator(null);
@@ -371,7 +377,7 @@ function SpaceViewerAttempt({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cityReady, activeSource, focus?.title, replay?.caption, reading, drawer, elevator, trophy, openSource, closeReading]);
+  }, [cityReady, editing, activeSource, focus?.title, replay?.caption, reading, drawer, elevator, trophy, openSource, closeReading]);
 
   const space = payload?.space;
   const flowsWithTraces = useMemo(() => (space?.flows ?? []).map((flow) => ({ flow, traces: buildFlowReplay(flow).traces })), [space]);
@@ -679,7 +685,7 @@ function SpaceViewerAttempt({
     if (!canvas || !root || !handle) return;
 
     const hud = root.querySelector<HTMLElement>(".kd-city-hud");
-    const panel = root.querySelector<HTMLElement>(reading ? ".kd-source-inspector"
+    const panel = spatialStage && detailsCollapsed && !reading ? null : root.querySelector<HTMLElement>(reading ? ".kd-source-inspector"
       : spatialStage ? ".kd-replay-inspector" : overview ? ".kd-city-map" : ".kd-entrance");
     const transport = spatialStage ? root.querySelector<HTMLElement>(".kd-replay-transport") : null;
     const measure = (): void => {
@@ -705,7 +711,7 @@ function SpaceViewerAttempt({
       root.style.removeProperty("--kd-stage-panel-height");
       root.style.removeProperty("--kd-hud-bottom");
     };
-  }, [spatialStage, stageTransport, explaining, showEntrance, overview, drawer, reading, payload, packRoles, overlays]);
+  }, [spatialStage, stageTransport, explaining, detailsCollapsed, showEntrance, overview, drawer, reading, payload, packRoles, overlays]);
 
   const eHint =
     focus?.kind === "door-enter"
@@ -743,12 +749,12 @@ function SpaceViewerAttempt({
     : undefined;
 
   return (
-    <div className={`kd-space${spatialStage ? " kd-space-stage" : ""}${explaining ? " kd-space-explain" : ""} kd-text-${textScale === 1.3 ? "large" : textScale === 1.15 ? "medium" : "normal"} relative h-dvh w-full overflow-hidden`}>
+    <div className={`kd-space${spatialStage ? " kd-space-stage" : ""}${overview ? " kd-space-overview" : ""}${explaining ? " kd-space-explain" : ""}${detailsCollapsed ? " kd-space-details-collapsed" : ""} kd-text-${textScale === 1.3 ? "large" : textScale === 1.15 ? "medium" : "normal"} relative h-dvh w-full overflow-hidden`}>
       <canvas ref={canvasRef} className="block h-full w-full" />
       <div ref={setWorldInert} aria-hidden={!cityReady || undefined}>
 
       {/* world labels */}
-      {labels.map((label) => {
+      {(editing ? [] : labels).map((label) => {
         const position = { left: `${label.xPct}%`, top: `${label.yPct}%`, width: label.widthPx };
         const placement = "absolute -translate-x-1/2 -translate-y-full rounded";
         const measured = label.lines ? " kd-world-measured" : "";
@@ -758,7 +764,7 @@ function SpaceViewerAttempt({
           <button
             key={label.id}
             type="button"
-            className={`${placement} kd-world-select px-2 py-1 text-[11px]${measured || " max-w-40 truncate"}${spatialStage && label.minor ? " kd-world-edge-label" : ""}${label.active ? " kd-world-active" : ""}${label.badge ? " kd-world-row" : ""}`}
+            className={`${placement} kd-world-select px-2 py-1 text-[11px]${measured || " max-w-40 truncate"}${label.minor ? " kd-world-minor" : ""}${spatialStage && label.minor ? " kd-world-edge-label" : ""}${label.active ? " kd-world-active" : ""}${label.badge ? " kd-world-row" : ""}`}
             style={position}
             title={label.text}
             aria-label={label.badge ? `Decision row ${label.text}` : label.text}
@@ -780,7 +786,7 @@ function SpaceViewerAttempt({
       })}
 
       {/* top bar */}
-      <div className="kd-city-hud">
+      <div className="kd-city-hud" ref={setHudInert} aria-hidden={editing ? true : undefined}>
         <div className="kd-space-top kd-city-title">
           <span className="truncate font-bold">{space?.meta.name ?? "Kodyurd"}</span>
           {draftJobId && <span className="kd-draft-badge">Draft</span>}
@@ -801,6 +807,10 @@ function SpaceViewerAttempt({
           )}
         </div>
         <div className="kd-hud-actions">
+          {(inspect || replay) && !drawer && !reading && !editing && <button type="button" className="kd-space-top"
+            aria-controls="kd-stage-details" aria-expanded={!detailsCollapsed} onClick={() => setDetailsCollapsed((value) => !value)}>
+            {detailsCollapsed ? "Show details" : "Hide details"}
+          </button>}
           {readingResume && !reading && !drawer && <button type="button" className="kd-space-top" onClick={resumeReading}>↶ Resume reading</button>}
           <button type="button" className="kd-space-top" aria-pressed={overview} onClick={() => {
             unlockView();
@@ -844,22 +854,34 @@ function SpaceViewerAttempt({
         </div>
       )}
 
-      {overview && !drawer && !reading && (
+      {overview && !drawer && !reading && !editing && (
         <aside className="kd-learn-card kd-city-map" aria-label="City overview">
           <div className="kd-learn-heading"><div className="kd-learn-eyebrow"><span /> City overview</div>
             <button type="button" className="kd-learn-icon" aria-label="Close city overview" onClick={() => handleRef.current?.overview.close()}>×</button>
           </div>
-          <p>Locate a building to see its connections, or select a specific connection below.</p>
+          <p>Up to six source-linked connections give an overview. Select a building for its neighborhood.</p>
+          <ul className="kd-map-legend" aria-label="District colors">
+            {payload?.layout.city.districts.map((district, index) => <li key={district.id}>
+              <button type="button" onClick={() => handleRef.current?.focusRef(district.id)}>
+                <span aria-hidden="true" style={{ background: districtStyle(index).ground, borderColor: districtStyle(index).border }}>{index + 1}</span>
+                {mapDistrictTitle(space?.city.districts.find(({ id }) => id === district.id)?.title ?? district.id, space?.meta.name ?? "Workspace", payload?.layout.city.districts.length ?? 0)}
+              </button>
+            </li>)}
+          </ul>
+          <p className="kd-map-lesson-key"><span aria-hidden="true">▥</span> Open-book roof marker: a lesson is available inside.</p>
           <button type="button" className="kd-learn-action" onClick={() => handleRef.current?.overview.fit()}>Fit city</button>
           {startBuilding && <button type="button" className="kd-learn-action" onClick={() => handleRef.current?.overview.focus(startBuilding.id)}>Locate {startBuilding.title}</button>}
-          {payload?.layout.city.campus && space && <details className="kd-lesson-review-item">
+          {space && <details className="kd-lesson-review-item">
             <summary>Buildings ({space.city.buildings.length})</summary>
             {space.city.buildings.map((building) => <button key={building.id} type="button" className="kd-learn-action"
-              onClick={() => handleRef.current?.overview.focus(building.id)}>{building.title}</button>)}
+              onClick={() => handleRef.current?.overview.focus(building.id)}>{building.title}{Boolean(interiorsByBuilding.get(building.id)?.length) && <small> · Lesson</small>}</button>)}
           </details>}
           {overviewLinks.length > 0 && <details className="kd-lesson-review-item">
             <summary>Source-linked connections ({overviewLinks.length})</summary>
-            {overviewLinks.map((link) => <button key={link.id} type="button" className="kd-learn-action" onClick={() => handleRef.current?.focusRef(link.id)}>{link.title}</button>)}
+            {overviewLinks.map((link) => <button key={link.id} type="button" className="kd-learn-action" onClick={() => handleRef.current?.focusRef(link.id)}>
+              {space?.city.buildings.find(({ id }) => id === link.from)?.title} → {space?.city.buildings.find(({ id }) => id === link.to)?.title}
+              <small>{link.title}</small>
+            </button>)}
           </details>}
         </aside>
       )}
@@ -927,8 +949,9 @@ function SpaceViewerAttempt({
         </aside>
       )}
 
-      {replay && !drawer && !reading && <ReplayPanels
+      {replay && !drawer && !reading && !editing && <ReplayPanels
         replay={replay}
+        collapsed={detailsCollapsed}
         controls={handleRef.current?.replay}
         openSource={openSource}
         traces={flowsWithTraces.find(({ flow }) => flow.id === replay.flowId)?.traces ?? []}
@@ -937,21 +960,25 @@ function SpaceViewerAttempt({
         ask={!offline ? () => openGuide() : undefined}
       />}
 
-      {editing && !drawer && !reading && space && <DiagramEditor
+      {editing && space && <DiagramEditor
         key={`${editing.diagram.id}:${revision}`}
         diagram={editing.diagram} isNew={editing.isNew}
+        baseStatus={payload?.diagramEdits?.find(({ id: diagramId }) => diagramId === editing.diagram.id)}
         canRestore={!editing.isNew && editing.diagram.origin === "user"}
         positions={payload?.layout.diagrams[editing.diagram.id]?.nodes}
         buildings={space.city.buildings.map(({ id: buildingId, title }) => ({ id: buildingId, title }))}
         save={saveDiagram}
         restore={id ? async () => {
           await api.removeDiagramEdit(id, editing.diagram.id);
-          reloadCity(editing.diagram.id.startsWith("user-") ? undefined : editing.diagram.id);
+          const missingBase = payload?.diagramEdits?.some(({ id: diagramId, state, hasGenerated }) => diagramId === editing.diagram.id && (state === "missing" || hasGenerated === false));
+          reloadCity(editing.diagram.id.startsWith("user-") || missingBase ? undefined : editing.diagram.id);
         } : undefined}
         close={() => setEditing(null)}
       />}
       {inspect && !replay && !drawer && !reading && !editing && explaining && activeDiagram && <DiagramExplanation
+        collapsed={detailsCollapsed}
         diagram={activeDiagram}
+        baseStatus={payload?.diagramEdits?.find(({ id: diagramId }) => diagramId === activeDiagram.id)}
         owner={activeDiagram.owner === "city" ? "City" : space?.city.buildings.find((building) => building.id === activeDiagram.owner.split(":")[0])?.title ?? "Building"}
         selectedRef={selectedDiagramItem?.ref}
         select={(ref) => handleRef.current?.focusRef(ref)}
@@ -967,9 +994,11 @@ function SpaceViewerAttempt({
         edit={canEdit ? () => editDiagram(activeDiagram) : undefined}
       />}
       {inspect && !replay && !drawer && !reading && !editing && !explaining && <DiagramPanels
+        collapsed={detailsCollapsed}
         inspect={inspect} controls={handleRef.current?.inspect} openSource={openSource}
         selection={selectedDiagramItem} clearSelection={() => setFocus(null)}
         diagram={activeDiagram}
+        baseStatus={payload?.diagramEdits?.find(({ id: diagramId }) => diagramId === activeDiagram?.id)}
         selectItem={(ref) => handleRef.current?.focusRef(ref)}
         flowTitle={diagramFlow?.title} openFlow={diagramFlow && (() => openReplay({ flow: diagramFlow.id }))}
         showExplain={inspect.spatial && activeDiagram ? () => { handleRef.current?.inspect.pause(); setExplainId(activeDiagram.id); } : undefined}
@@ -977,7 +1006,7 @@ function SpaceViewerAttempt({
       />}
 
       {/* tour bar */}
-      {stop && !drawer && !reading && !trophy && (
+      {stop && !drawer && !reading && !trophy && !editing && (
         <aside className={`kd-learn-card kd-tour-card${replay || inspect ? " kd-tour-with-stage" : ""}`} aria-label="Guided tour">
           <div className="flex items-center gap-2">
             <span className="kd-learn-eyebrow">

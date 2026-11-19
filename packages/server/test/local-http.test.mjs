@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -63,6 +63,12 @@ test("the local listener requires same-origin context before accessing workspace
   const foreignOrigin = "https://foreign.example";
   const wrongPort = server.port === 4717 ? 4718 : 4717;
   const sameOrigin = { "sec-fetch-site": "same-origin" };
+  const health = await send(server, "/api/health", { headers: sameOrigin });
+  assert.equal(health.status, 200);
+  assert.deepEqual(JSON.parse(health.body), {
+    ok: true,
+    version: JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")).version
+  });
   const directNavigation = await send(server, "/", {
     headers: { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" }
   });

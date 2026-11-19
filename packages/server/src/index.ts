@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { openDb, type SqliteDb } from "./db.js";
 import { registerApi } from "./routes.js";
 import { recoverWorkspaceRemovals } from "./workspace-maintenance.js";
@@ -30,9 +30,11 @@ export interface RunningServer {
 }
 
 export async function startServer(opts: ServerOptions): Promise<RunningServer> {
+  const version = opts.version ?? (JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8")
+  ) as { version: string }).version;
   const app = Fastify({ logger: false });
   const db: SqliteDb = openDb(opts.dataDir);
-  const version = opts.version ?? "0.1.0";
 
   app.addHook("onRequest", async (req, reply) => {
     const port = req.raw.socket.localPort;
@@ -83,7 +85,7 @@ export async function startServer(opts: ServerOptions): Promise<RunningServer> {
   try {
     url = await app.listen({ port: opts.port ?? 4717, host: loopbackHost });
     db.prepare(
-      "UPDATE jobs SET status = 'interrupted', updated_at = ? WHERE status IN ('queued', 'running')"
+      "UPDATE jobs SET status = 'interrupted', updated_at = ? WHERE status IN ('queued', 'running', 'stopping')"
     ).run(new Date().toISOString());
     await recoverWorkspaceRemovals(db, opts.dataDir);
   } catch (error) {

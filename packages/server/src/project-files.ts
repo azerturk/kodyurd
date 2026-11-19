@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { promises as fs, renameSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { AgentError } from "./agents.js";
 import { analyzeSource, INVENTORY_VERSION, type AnalyzerReport } from "./analyzer.js";
@@ -31,13 +31,47 @@ export function overlaysPath(dataDir: string, projectId: string): string {
   return path.join(projectDir(dataDir, projectId), "overlays.json");
 }
 
-export async function atomicJson(file: string, value: unknown): Promise<void> {
+export async function atomicJson(file: string, value: unknown, beforeCommit?: () => void): Promise<void> {
   const temp = `${file}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(temp, JSON.stringify(value));
-    await fs.rename(temp, file);
+    if (beforeCommit) {
+      // A Stop event must not run after the guard but before the published rename.
+      beforeCommit();
+      renameSync(temp, file);
+    } else await fs.rename(temp, file);
   } finally {
     await fs.rm(temp, { force: true }).catch(() => undefined);
+  }
+}
+
+interface JsonWrite { file: string; value: unknown }
+
+/** Publish matching offers and city together without an event-loop gap between their commits. */
+export async function atomicJsonPair(entries: readonly [JsonWrite, JsonWrite], beforeCommit: () => void): Promise<void> {
+  const staged = entries.map(({ file, value }) => ({ file, value, temp: `${file}.${randomUUID()}.tmp` }));
+  const backup = `${entries[0].file}.${randomUUID()}.previous.tmp`;
+  try {
+    const previous = await fs.readFile(entries[0].file).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    });
+    const writes = await Promise.allSettled(staged.map(({ temp, value }) => fs.writeFile(temp, JSON.stringify(value))));
+    const failed = writes.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+    if (previous !== undefined) await fs.writeFile(backup, previous);
+    beforeCommit();
+    renameSync(staged[0].temp, staged[0].file);
+    try {
+      renameSync(staged[1].temp, staged[1].file);
+    } catch (error) {
+      // The city remains the publication boundary if its replacement fails.
+      if (previous !== undefined) renameSync(backup, staged[0].file);
+      else unlinkSync(staged[0].file);
+      throw error;
+    }
+  } finally {
+    await Promise.allSettled([...staged.map(({ temp }) => temp), backup].map((file) => fs.rm(file, { force: true })));
   }
 }
 

@@ -280,8 +280,19 @@ button.kd-space-top:hover, button.kd-space-top[aria-pressed="true"] { background
   font-weight: 700;
 }
 .kd-world-select:hover, .kd-world-select:focus-visible { background: #ccf4ea; }
+.kd-map-legend { display: grid; gap: .35rem; padding: 0; margin: .65rem 0; list-style: none; }
+.kd-map-legend button { display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left; font-size: .78rem; font-weight: 650; }
+.kd-map-legend button span { display: grid; place-items: center; flex: 0 0 1.6rem; height: 1.6rem; border: 2px solid; border-radius: .3rem; color: #203a32; }
+.kd-map-lesson-key span { display: inline-block; padding: .05rem .3rem; border-radius: .3rem; background: #226c61; color: #fff6de; }
+.kd-generation-details { margin-block: .6rem; border-top: 1px solid var(--learn-line); padding-top: .5rem; }
+.kd-generation-details summary { cursor: pointer; color: var(--learn-muted); font-size: .75rem; }
+.kd-replay-inspector[hidden] { display: none; }
+.kd-space-overview .kd-world-select { font-size: 13px; font-weight: 700; }
+.kd-space-overview .kd-world-select.kd-world-minor { font-size: 12px; font-weight: 650; }
+.kd-space-overview .kd-world-measured { white-space: pre-line; line-height: 16px; overflow-wrap: anywhere; }
 .kd-space-stage { --kd-stage-panel-width: min(22rem, 29vw); }
 .kd-space-explain { --kd-stage-panel-width: min(26rem, 33vw); }
+.kd-space-details-collapsed { --kd-stage-panel-width: 0px; }
 .kd-space-stage .kd-city-hud {
   border-bottom: 1px solid #ded2b9;
   background: #fff8ea;

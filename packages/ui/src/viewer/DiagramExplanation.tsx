@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SpaceAssessmentQuestion, SpaceCardinality, SpaceDiagram, SpaceDiagramClaim, SpaceSource } from "../space-types";
+import type { DiagramEditStatus, SpaceAssessmentQuestion, SpaceCardinality, SpaceDiagram, SpaceDiagramClaim, SpaceSource } from "../space-types";
+import { DiagramEditNotice } from "./DiagramEditNotice";
 import { claimsForItem, connectionsForNode, diagramItems, diagramTitle, type DiagramItem } from "./diagram-explanation";
 import { isDocumentPath, type ReadingEvidence } from "./document-navigation";
+import { diagramNote } from "./diagram-note";
 
 type ReplayTarget = NonNullable<SpaceAssessmentQuestion["replay"]>;
 type ReplayEvidence = Extract<ReadingEvidence, { kind: "replay" }>;
@@ -50,7 +52,7 @@ function Claim({ claim, openSource, openReplay }: { claim: SpaceDiagramClaim; op
 }
 
 export function DiagramExplanation({
-  diagram, owner, selectedRef, select, close, fit, openSource, openReplay, showInspect, relatedReplays, ask, edit, topDown, toggleProjection
+  diagram, owner, selectedRef, select, close, fit, openSource, openReplay, showInspect, relatedReplays, ask, edit, topDown, toggleProjection, collapsed = false, baseStatus
 }: {
   diagram: SpaceDiagram;
   owner: string;
@@ -66,7 +68,10 @@ export function DiagramExplanation({
   edit?: () => void;
   topDown?: boolean;
   toggleProjection?: () => void;
+  collapsed?: boolean;
+  baseStatus?: DiagramEditStatus;
 }) {
+  const note = diagramNote(diagram);
   const heading = useRef<HTMLHeadingElement>(null);
   const selectionHeading = useRef<HTMLHeadingElement>(null);
   const focusSelection = useRef(false);
@@ -106,14 +111,16 @@ export function DiagramExplanation({
     const node = nodes.get(id);
     return node ? <button className="kd-doc-link" type="button" onClick={() => selectRelated(node.ref)}>{node.label}</button> : id;
   };
-  return <aside className="kd-learn-card kd-replay-inspector kd-explanation" aria-label="Diagram explanation">
+  return <aside id="kd-stage-details" hidden={collapsed} className="kd-learn-card kd-replay-inspector kd-explanation" aria-label="Diagram explanation">
     <div className="kd-learn-heading">
       <div className="kd-learn-eyebrow"><span /> {diagramTitle(diagram)} · {owner}</div>
       <button type="button" className="kd-learn-icon" onClick={close} aria-label="Close diagram">×</button>
     </div>
     <h2 ref={heading} tabIndex={-1}>{diagram.title}</h2>
+    <DiagramEditNotice status={baseStatus} />
     <DiagramViewSwitch mode="explain" onChange={(mode) => { if (mode === "inspect") showInspect(); }} />
-    {diagram.note && <p className="kd-explain-note">{diagram.note}</p>}
+    {note.content && <p className="kd-explain-note">{note.content}</p>}
+    {note.diagnostic && <details className="kd-generation-details"><summary>Generation details</summary><p>{note.diagnostic}</p></details>}
     <section className="kd-explain-selection" aria-label="Current selection">
       <div className="kd-learn-eyebrow">{selection?.kind === "edge" ? "Relationship" : selection ? isDataModel ? Record : "Selected node" : "Diagram overview"}</div>
       <h3 ref={selectionHeading} tabIndex={-1} aria-live="polite">{selection?.label ?? (isDataModel ? `Choose ${record === "entity" ? "an entity" : "a type"} or relationship` : "Choose a node or link")}</h3>

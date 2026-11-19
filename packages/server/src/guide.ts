@@ -1,9 +1,8 @@
-import { promises as fs } from "node:fs";
-import type { TSpaceDocument } from "@kodyurd/scene-schema";
 import { summarizeForPrompt, type AnalyzerReport } from "./analyzer.js";
 import { AgentError, extractJsonObject, extractResultText, runAgent, type AgentId } from "./agents.js";
 import type { ProjectRow } from "./jobs.js";
-import { generationDraftPath, getOrCreateAnalysis, spacePath } from "./project-files.js";
+import { generationDraftPath, getOrCreateAnalysis } from "./project-files.js";
+import { readSavedSpace, readSavedSpaceFile } from "./saved-space.js";
 import { buildAskPrompt } from "./prompt.js";
 import {
   collectGuideEvidence, createSourceReader, guideEvidenceCovers, isDocumentationOnly, relatedGuideClaimSources, relatedGuideScenarios,
@@ -42,11 +41,12 @@ export interface AskResult {
   citations?: { path: string; startLine?: number; endLine?: number; focusRef?: string }[];
 }
 
-async function guideContext(args: AskArgs, report: AnalyzerReport, read: SourceReader): Promise<{ text?: string; refs: Set<string>; evidence: EvidenceExcerpt[] }> {
+export async function guideContext(args: AskArgs, report: AnalyzerReport, read: SourceReader): Promise<{ text?: string; refs: Set<string>; evidence: EvidenceExcerpt[] }> {
   const refs = new Set<string>();
   try {
-    const file = args.draftJobId ? generationDraftPath(args.dataDir, args.project.id, args.draftJobId) : spacePath(args.dataDir, args.project.id);
-    const { space } = JSON.parse(await fs.readFile(file, "utf8")) as { space: TSpaceDocument };
+    const { space } = args.draftJobId
+      ? await readSavedSpaceFile(generationDraftPath(args.dataDir, args.project.id, args.draftJobId), args.project.source_dir)
+      : await readSavedSpace(args.dataDir, args.project.id, args.project.source_dir);
     for (const item of [...space.city.buildings, ...space.diagrams, ...space.flows]) refs.add(item.id);
     const readingPath = args.focusSourcePath?.replaceAll("\\", "/");
     const readingModule = readingPath && (report.docs.find(({ path }) => path === readingPath)?.module ?? report.modules
@@ -74,6 +74,9 @@ async function guideContext(args: AskArgs, report: AnalyzerReport, read: SourceR
     const checked = targetSource ? await verifiedSourceRef(targetSource, read) : undefined;
     const related = flow ? relatedGuideScenarios(flow, args.question) : [];
     const anchors = checked ? [checked] : [];
+    if (diagram) {
+      anchors.push(...[...diagram.nodes, ...diagram.edges].flatMap(({ source }) => source ? [source] : []).slice(0, 8));
+    }
     for (const index of [0, 1]) {
       for (const candidate of related) {
         const source = candidate.events[index]?.source;
@@ -90,7 +93,13 @@ async function guideContext(args: AskArgs, report: AnalyzerReport, read: SourceR
       .filter(({ events }) => events.length > 0);
     const trace = scenario ? { id: scenario.id, title: scenario.title, summary: scenario.summary, steps: scenario.steps } : undefined;
     const scene = flow ? { flow: flow.id, title: flow.title, active, activeStepIndex, scenario: trace, relatedScenarios, source: flow.source }
-      : diagram ? { id: diagram.id, title: diagram.title, note: diagram.note, source: diagram.source }
+      : diagram ? { id: diagram.id, title: diagram.title, kind: diagram.kind, owner: diagram.owner, origin: diagram.origin,
+        note: diagram.note, source: diagram.source,
+        provenance: diagram.origin === "user" ? "User-authored scene context; only the numbered source excerpts substantiate code or design claims." : undefined,
+        nodes: diagram.nodes.slice(0, 16).map(({ id, label, group, hint, source, fields }) => ({ id, label, group, hint, source,
+          fields: fields?.slice(0, 8) })),
+        edges: diagram.edges.slice(0, 24),
+        omittedNodes: Math.max(0, diagram.nodes.length - 16), omittedEdges: Math.max(0, diagram.edges.length - 24) }
         : building ?? { available: [...refs].slice(0, 20) };
     const readingScope = owner && isDocumentationOnly(report, owner.moduleRef) ? "Authored design scope" : undefined;
     return { text: JSON.stringify({ scene, readingScope, evidence }), refs, evidence };

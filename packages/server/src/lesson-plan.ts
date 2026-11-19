@@ -3,6 +3,7 @@ import type { AnalyzerReport } from "./analyzer.js";
 import { AgentError } from "./agents.js";
 import type { FocusDeliverable } from "./focus-generation.js";
 import { CityPlan, type TCityPlan } from "./space-pipeline.js";
+import { moduleScanMetrics } from "./city-facts.js";
 
 /**
  * Which buildings one generation teaches: the focus, the modules the brief pins, and the
@@ -109,7 +110,7 @@ export function focusedBuilding(plan: TCityPlan, report: AnalyzerReport, module:
   const path = source.entryFiles?.[0] ?? source.topFiles[0]?.path;
   plan.city.buildings.unshift({
     id, moduleRef: module, title, district: district.id,
-    metrics: { files: source.files, loc: source.loc, docs: report.docs.filter((doc) => doc.matches.includes(module)).length },
+    metrics: moduleScanMetrics(report, module)!,
     archetype: "landmark", summary: "", source: path ? { path } : undefined
   });
   plan.city.buildings = plan.city.buildings.slice(0, 120);
@@ -123,7 +124,7 @@ export function inventoryCity(report: AnalyzerReport, title: string, focusModule
     buildings: modules.map((module) => ({
       id: `module-${createHash("sha256").update(module.name).digest("hex").slice(0, 14)}`,
       moduleRef: module.name, title: module.name.split("/").at(-1), district: "workspace",
-      metrics: { files: module.files, loc: module.loc, docs: report.docs.filter((doc) => doc.matches.includes(module.name)).length },
+      metrics: moduleScanMetrics(report, module.name)!,
       archetype: module.name === focusModule ? "landmark" : "low", summary: "",
       source: module.entryFiles?.[0] ? { path: module.entryFiles[0] } : undefined
     }))

@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { checkCommand } from "./doctor.js";
+import { checkAgentCommand } from "./doctor.js";
 import { getAnthropicKey } from "./config.js";
 import { localCommand, windowsSystemExecutable } from "./local-command.js";
 import type { SceneReference } from "./scene-reference.js";
@@ -29,8 +29,8 @@ export interface AgentInfo {
 }
 
 export function detectAgents(dataDir?: string): AgentInfo[] {
-  const claude = checkCommand("claude");
-  const codex = checkCommand("codex");
+  const claude = checkAgentCommand("claude");
+  const codex = checkAgentCommand("codex");
   const apiKey = Boolean(getAnthropicKey(dataDir));
   return [
     { id: "claude", available: claude.found, detail: claude.detail, implemented: true, readsFiles: true },
@@ -50,6 +50,8 @@ export interface AgentRunOptions {
   /** Project source directory, used only for explicit workspace discovery. */
   cwd: string;
   timeoutMs: number;
+  /** User cancellation is separate from a provider timeout. */
+  signal?: AbortSignal;
   /** App data dir (for stored API keys). */
   dataDir?: string;
   /** Optional model override — claude --model / codex -m / API model id. */
@@ -64,6 +66,14 @@ export interface AgentRunOptions {
 
 const cliVision = new Map<"claude" | "codex", boolean>();
 const CLI_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9.:/_-]{0,63}$/;
+
+function cancelledAgent(): AgentError {
+  return new AgentError("AGENT_CANCELLED", "Agent request stopped.");
+}
+
+function assertAgentActive(signal?: AbortSignal): void {
+  if (signal?.aborted) throw cancelledAgent();
+}
 
 /** Probe local adapter flags only. Never send a model request from preflight. */
 export function supportsSceneReference(agent: AgentId, reference: SceneReference): boolean {
@@ -96,6 +106,7 @@ async function runCliAgent(
   onStdout?: (chunk: string) => void,
   input = opts.prompt
 ): Promise<string> {
+  assertAgentActive(opts.signal);
   if (opts.model && !CLI_MODEL_ID.test(opts.model)) {
     throw new AgentError("AGENT_MODEL_INVALID", "The selected CLI model name contains unsupported characters.");
   }
@@ -113,6 +124,7 @@ async function runCliAgent(
     }
   }
   try {
+    assertAgentActive(opts.signal);
     return await collectCliOutput(launch, cwd, opts, label, onStdout, input);
   } finally {
     if (packetOnly) await rmdir(cwd).catch(() => undefined);
@@ -127,6 +139,7 @@ function collectCliOutput(
   onStdout: ((chunk: string) => void) | undefined,
   input: string
 ): Promise<string> {
+  assertAgentActive(opts.signal);
   const env = { ...process.env };
   delete env.TRIPO_API_KEY;
   if (label === "Claude CLI") delete env.OPENAI_API_KEY;
@@ -143,38 +156,53 @@ function collectCliOutput(
       env,
       windowsVerbatimArguments: launch.windowsVerbatimArguments,
       windowsHide: true,
+      detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"]
     });
 
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let stopping: AgentError | undefined;
+    let stopTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (err?: AgentError, value?: string): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(stopTimer);
+      opts.signal?.removeEventListener("abort", onAbort);
       if (err) reject(err);
       else resolve(value ?? "");
     };
 
-    const stop = (): void => {
+    const stop = (error: AgentError): void => {
+      if (settled || stopping) return;
+      stopping = error;
       const taskkill = process.platform === "win32" ? windowsSystemExecutable("taskkill.exe") : undefined;
       if (taskkill && child.pid !== undefined) {
         const killer = spawn(taskkill, ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.on("error", () => child.kill());
         killer.on("exit", (code) => { if (code !== 0) child.kill(); });
       } else {
-        child.kill();
+        try {
+          if (process.platform !== "win32" && child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+          else child.kill();
+        } catch {
+          child.kill();
+        }
       }
       child.stdin.destroy();
       child.stdout.destroy();
       child.stderr.destroy();
+      // Keep the job lock until the process closes, with a finite cleanup bound.
+      stopTimer = setTimeout(() => finish(error), 2_000);
     };
 
+    const onAbort = (): void => stop(cancelledAgent());
+
     const timer = setTimeout(() => {
-      stop();
-      finish(
+      stop(
         new AgentError(
           "AGENT_TIMEOUT",
           `${label} did not finish within ${Math.round(opts.timeoutMs / 60000)} minutes. ` +
@@ -182,14 +210,15 @@ function collectCliOutput(
         )
       );
     }, opts.timeoutMs);
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
 
     child.stdout.on("data", (chunk) => {
+      if (settled || stopping) return;
       const text = String(chunk);
       stdout += text;
       if (onStdout) onStdout(text);
       if (stdout.length > 20 * 1024 * 1024) {
-        stop();
-        finish(new AgentError("AGENT_OUTPUT_LIMIT", "Agent output exceeded 20MB"));
+        stop(new AgentError("AGENT_OUTPUT_LIMIT", "Agent output exceeded 20MB"));
       }
     });
     child.stderr.on("data", (chunk) => {
@@ -197,13 +226,14 @@ function collectCliOutput(
     });
     child.on("error", () =>
       finish(
-        new AgentError(
+        stopping ?? new AgentError(
           "AGENT_SPAWN_FAILED",
         `Could not start ${label}. Check its installation and PATH.`
         )
       )
     );
     child.on("close", (code) => {
+      if (stopping) return finish(stopping);
       if (code !== 0 && opts.reference && /(?:image|vision).*(?:unsupported|not supported|not available)|(?:unsupported|not supported).*image/i.test(stderr)) {
         finish(new AgentError("AGENT_IMAGE_UNSUPPORTED", "The selected runner rejected image input."));
         return;
@@ -216,7 +246,8 @@ function collectCliOutput(
     });
 
     child.stdin.on("error", () => undefined);
-    child.stdin.end(input);
+    if (opts.signal?.aborted) onAbort();
+    else child.stdin.end(input);
   });
 }
 
@@ -319,6 +350,7 @@ export function runCodex(opts: AgentRunOptions): Promise<string> {
 
 /** Anthropic REST API (no file access — scenes ground in the analysis summary only). */
 export async function runApi(opts: AgentRunOptions): Promise<string> {
+  assertAgentActive(opts.signal);
   const apiKey = getAnthropicKey(opts.dataDir);
   if (!apiKey) {
     throw new AgentError(
@@ -328,8 +360,12 @@ export async function runApi(opts: AgentRunOptions): Promise<string> {
   }
   const model = opts.model ?? process.env.KODYURD_ANTHROPIC_MODEL ?? "claude-sonnet-5-5";
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, opts.timeoutMs);
+  const onAbort = (): void => controller.abort();
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
   try {
+    assertAgentActive(opts.signal);
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: controller.signal,
@@ -344,6 +380,7 @@ export async function runApi(opts: AgentRunOptions): Promise<string> {
         messages: [{ role: "user", content: opts.reference ? [{ type: "text", text: opts.prompt }, imageContent(opts.reference)] : opts.prompt }]
       })
     });
+    assertAgentActive(opts.signal);
     if (!res.ok) {
       const body = (await res.text()).slice(0, 300);
       if (opts.reference && res.status === 400 && /image|vision/i.test(body)) {
@@ -357,6 +394,7 @@ export async function runApi(opts: AgentRunOptions): Promise<string> {
       throw new AgentError("AGENT_API_FAILED", `Anthropic API request failed (HTTP ${res.status}). ${advice}`);
     }
     const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
+    assertAgentActive(opts.signal);
     if (data.stop_reason === "max_tokens") {
       throw new AgentError("AGENT_OUTPUT_LIMIT", "Anthropic API reached its output-token limit before finishing the response.");
     }
@@ -367,17 +405,20 @@ export async function runApi(opts: AgentRunOptions): Promise<string> {
     if (!text.trim()) throw new AgentError("AGENT_API_FAILED", "Anthropic API returned no text.");
     return text;
   } catch (err) {
+    if (opts.signal?.aborted) throw cancelledAgent();
     if (err instanceof AgentError) throw err;
-    if ((err as Error).name === "AbortError") {
+    if (timedOut || (err as Error).name === "AbortError") {
       throw new AgentError("AGENT_TIMEOUT", "Anthropic API call timed out.");
     }
     throw new AgentError("AGENT_API_FAILED", "Anthropic API request failed before a usable response was received.");
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
   }
 }
 
-export function runAgent(agent: AgentId, opts: AgentRunOptions): Promise<string> {
+export async function runAgent(agent: AgentId, opts: AgentRunOptions): Promise<string> {
+  assertAgentActive(opts.signal);
   if (agent === "claude") return runClaude(opts);
   if (agent === "codex") return runCodex(opts);
   return runApi(opts);

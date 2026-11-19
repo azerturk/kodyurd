@@ -1,6 +1,6 @@
 {
   "name": "kodyurd",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Turn any codebase into a walkable 3D space — locally, with your own AI agent.",
   "keywords": [
     "3d",
@@ -24,15 +24,15 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@kodyurd/server": "0.6.0",
-    "@kodyurd/ui": "0.6.0"
+    "@kodyurd/server": "0.7.0",
+    "@kodyurd/ui": "0.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "typescript": "^5.6.3"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.13.0"
   },
   "publishConfig": {
     "access": "public"

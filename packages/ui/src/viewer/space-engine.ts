@@ -12,6 +12,7 @@ import type {
 } from "../space-types";
 import { buildFlowReplay, selectReplayCursor, type ReplayTrace } from "./flow-replay";
 import { cityRelationships, type CityRelationship } from "./city-relations";
+import { districtStyle, mapDistrictTitle } from "./city-map";
 import { diagramTitle } from "./diagram-explanation";
 import { overviewLinkRoute, visibleOverviewLinks } from "./overview-links";
 import { renderIconGlyph, renderSpatialGraph, renderSpatialSequence, spatialDiagram, spatialSequence, type SpatialEdge, type SpatialNode, type SpatialView } from "./spatial-graph";
@@ -19,7 +20,7 @@ import { fitDisplayCopy, signFaceMount, workshopExhibits, wrapDisplayCopy } from
 import { buildProceduralAvatar } from "./procedural-avatar";
 import { hasGlbDocument, isUnavailableModel, openingModelsState, type OpeningModelsState } from "./model-readiness";
 import { advanceVelocity, avatarVisibleAt, clearBoom, clearSurface, followBoom, groundedClipRate, intersectsWalker, streetExhibitSite, streetExhibitYaw, streetExitPoint, STREET_EXHIBIT_SIZE, walkGait, walkMove, walkPath, type WalkPoint, type WalkSolid } from "./walk-path";
-import { distanceToSegment, fitClearArrivalView, fitOrthographic, labelPosition, placeWorldLabel, viewRect, type Position3, type ViewInsets, type ViewRect } from "./view-projection";
+import { distanceToSegment, fitClearArrivalView, fitOrthographic, labelPosition, placeWorldLabel, readableNameplate, viewRect, type NameplateRaster, type Position3, type ViewInsets, type ViewRect } from "./view-projection";
 
 /**
  * Knowledge City renderer (Scene JSON v0.2 + SpaceLayout) — PlayCanvas 2.22.6.
@@ -231,7 +232,6 @@ function entrancePoint(building: CityLayout["buildings"][number], offset = 0): W
 const DAY = {
   sky: "#b7d9e7",
   ground: "#c3ccb6",
-  district: ["#d3d8c4", "#d9d6c2", "#cbd6cb", "#d9d3bd", "#ccd1cb"],
   road: "#8b9293",
   roadStripe: "#e4ecef",
   facade: ["#e2d7c4", "#d7d6ce", "#d9cbb7", "#d3d8ce"],
@@ -838,7 +838,7 @@ export function createSpaceViewer(
       d.rect.x + d.rect.w / 2,
       -0.04,
       d.rect.z + d.rect.d / 2,
-      materialFor(DAY.district[i % DAY.district.length]),
+      materialFor(districtStyle(i).ground),
       `district:${d.id}`
     );
     const meta = space.city.districts.find((sd) => sd.id === d.id);
@@ -1371,12 +1371,22 @@ export function createSpaceViewer(
       range2: 65 * 65,
       minor: false
     });
-    if (!campus || lb.doorDir.z <= 0) overviewLabels.push({
+    overviewLabels.push({
       world: "overview", id: `overview:${lb.id}`, ref: `overview:${lb.id}`,
       x: lb.pos.x, y: lb.size.h + 1.6, z: lb.pos.z, text: meta.title, range2: Infinity, minor: false
     });
     const hasInterior = interiorByBuilding.has(lb.id);
-    if (hasInterior) {
+    const hasLesson = Boolean(interiorByBuilding.get(lb.id)?.floors.length);
+    if (hasLesson) {
+      // The same open-book sign identifies taught buildings from the map without another model.
+      const lesson = new pc.Entity(`overview-lesson:${lb.id}`);
+      lesson.setPosition(lb.pos.x, h + 0.95, lb.pos.z);
+      overviewRoot.addChild(lesson);
+      part(lesson, "cylinder", 1.65, 0.16, 1.65, 0, 0, 0, materialFor("#226c61", DAY.teal, 0.3));
+      for (const side of [-1, 1]) {
+        const page = part(lesson, "box", 0.55, 0.10, 0.86, side * 0.27, 0.18, 0, materialFor("#fff6de"));
+        page.setLocalEulerAngles(0, 0, side * 12);
+      }
       // A banner beside the door marks a building that has a lesson to enter.
       const bannerX = doorX + lb.doorDir.x * 1.15 - lb.doorDir.z * 3.05;
       const bannerZ = doorZ + lb.doorDir.z * 1.15 + lb.doorDir.x * 3.05;
@@ -1489,12 +1499,12 @@ export function createSpaceViewer(
     const { x, z, w, d } = district.rect;
     const corners = [{ x, z }, { x: x + w, z }, { x: x + w, z: z + d }, { x, z: z + d }];
     for (let i = 0; i < corners.length; i++) {
-      drawOverviewStroke(corners[i], corners[(i + 1) % corners.length], 0.2, ["#467e79", "#587a9a", "#977349"][index % 3], true);
+      drawOverviewStroke(corners[i], corners[(i + 1) % corners.length], 0.2, districtStyle(index).border, true);
     }
     const title = space.city.districts.find((item) => item.id === district.id)?.title;
     if (title) overviewLabels.push({
       world: "overview", id: `district-overview:${district.id}`, x: x + w / 2, y: 1, z: z + d + 1,
-      text: title, range2: Infinity, minor: false
+      text: mapDistrictTitle(title, space.meta.name, layout.city.districts.length), range2: Infinity, minor: false
     });
   }
   const overviewSolids = (solids.get("city") ?? []).filter((solid) => !solid.label || solid.label === "plaza planter");
@@ -1675,6 +1685,7 @@ export function createSpaceViewer(
     targets: Map<string, {
       focus: SpaceFocus;
       node?: SpatialNode;
+      nameplate?: NameplateRaster;
       edge?: string;
       line?: { x: number; y?: number; z: number }[];
     }>;
@@ -1715,7 +1726,7 @@ export function createSpaceViewer(
   }
 
   const graphPlateHeight = 0.56;
-  function addGraphNameplate(root: pc.Entity, node: SpatialNode, textures: Screen[]): void {
+  function addGraphNameplate(root: pc.Entity, node: SpatialNode, textures: Screen[]): NameplateRaster {
     const width = node.width * 0.89;
     const height = graphPlateHeight;
     const screen = makeScreen(448, Math.round(448 * height / width), true, textures);
@@ -1743,6 +1754,7 @@ export function createSpaceViewer(
     const z = node.z + node.depth / 2;
     part(root, "box", width + 0.045, height + 0.045, 0.024, node.x, y, z + 0.015, materialFor("#b39d7e"));
     part(root, "box", width, height, 0.012, node.x, y, z + 0.036, screen.material, "node-nameplate");
+    return { fontSize: fit.size, textureWidth: plate.width, textureHeight: plate.height, lines: fit.lines.length };
   }
 
   function addEntityTablePlate(root: pc.Entity, node: SpatialNode, fields: SpaceDiagramField[], textures: Screen[], types = false): void {
@@ -1850,15 +1862,16 @@ export function createSpaceViewer(
     const entityMap = diagram?.kind === "erd" || diagram?.kind === "class";
     const entityFields = entityMap ? new Map(diagram.nodes.map(({ id, fields }) => [id, fields ?? []])) : undefined;
     for (const node of nodes) {
+      let nameplate: NameplateRaster | undefined;
       if (entityFields) addEntityTablePlate(root, node, entityFields.get(node.id) ?? [], textures, diagram?.kind === "class");
-      else if (node.y === undefined && diagram?.kind !== "matrix") addGraphNameplate(root, node, textures);
+      else if (node.y === undefined && diagram?.kind !== "matrix") nameplate = addGraphNameplate(root, node, textures);
       const ref = `stage:${id}:node:${node.id}`;
       labels.push({
         world: "stage", id: ref, ref, x: node.x, y: node.y !== undefined ? node.y + 0.31 : (node.visualHeight ?? 1.85) + 0.1,
         z: stageDepth + node.z - (entityMap ? node.depth / 2 + 0.20 : 0), text: node.label, range2: Infinity, minor: false
       });
       targets.set(ref, {
-        node,
+        node, nameplate,
         focus: { kind: "node", ref, title: node.label, summary: node.summary, sourcePath: node.source?.path, source: node.source }
       });
     }
@@ -4226,7 +4239,7 @@ export function createSpaceViewer(
         ]) : null;
         const visibleLabels = bird ? [...overviewLabels.filter(({ id }) =>
           !neighborhood || !id.startsWith("overview:") || neighborhood.has(id.slice(9))
-        ), ...overviewConnections.flatMap(({ id }) => {
+        ), ...(overviewFocus || overviewLink ? overviewConnections : []).flatMap(({ id }) => {
           const label = linkVisuals.get(id)?.label;
           return label ? [label] : [];
         })] : labelPoints;
@@ -4244,20 +4257,22 @@ export function createSpaceViewer(
           if (arrivalActive && !bird && lp.id.startsWith("b:") && clearBoom(position, tmpTo, solids.get("city") ?? [], 0.03) < 1) continue;
           const target = lp.ref ? graphStage?.targets.get(lp.ref) : undefined;
           const active = target && (activeNode !== undefined && target.node?.id === activeNode || activeEdge !== undefined && target.edge === activeEdge);
-          const priority = active || lp.ref !== undefined && lp.ref === graphStage?.selectedRef ? 0 : lp.minor ? 2 : 1;
-          const physicalPlate = graphStage && graphStage.diagram?.kind !== "matrix" ? target?.node : undefined;
-          if (priority > 0 && physicalPlate && physicalPlate.y === undefined && forward.z < -0.63) {
+          const overviewBuilding = bird && lp.id.startsWith("overview:") ? lp.id.slice(9) : undefined;
+          const priority = active || lp.ref !== undefined && lp.ref === graphStage?.selectedRef ||
+            bird && (overviewBuilding === overviewFocus || lp.id === overviewLink ||
+              !overviewFocus && !overviewLink && overviewBuilding === startBuilding?.id) ? 0
+            : bird ? overviewBuilding ? interiorByBuilding.get(overviewBuilding)?.floors.length ? 1 : 2 : lp.minor ? 4 : 3
+              : lp.minor ? 2 : 1;
+          const physicalPlate = target?.nameplate ? target.node : undefined;
+          if (priority > 0 && !lp.badge && physicalPlate && target?.nameplate && safe) {
             const plateY = (physicalPlate.group ? 0.103 : 0.002) + 0.68;
             const plateZ = stageDepth + physicalPlate.z + physicalPlate.depth / 2 + 0.036;
-            const start = cam.worldToScreen(new pc.Vec3(physicalPlate.x - physicalPlate.width * 0.445,
-              plateY + graphPlateHeight / 2, plateZ));
-            const end = cam.worldToScreen(new pc.Vec3(physicalPlate.x + physicalPlate.width * 0.445,
-              plateY - graphPlateHeight / 2, plateZ));
-            const readableHeight = physicalPlate.label.length > 24 ? 35 : 24;
-            if (Math.abs(end.y - start.y) >= readableHeight &&
-              Math.abs(end.x - start.x) >= Math.min(165, Math.max(58, physicalPlate.label.length * 6.5)) &&
-              safe && Math.min(start.x, end.x) >= safe.left && Math.max(start.x, end.x) <= safe.right &&
-              Math.min(start.y, end.y) >= safe.top && Math.max(start.y, end.y) <= safe.bottom) continue;
+            if (position.z > plateZ + 0.05) {
+              const corners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([side, top]) =>
+                cam.worldToScreen(new pc.Vec3(physicalPlate.x + side * physicalPlate.width * 0.445,
+                  plateY + top * graphPlateHeight / 2, plateZ)));
+              if (readableNameplate(corners, target.nameplate, safe)) continue;
+            }
           }
           const importantReplayNode = target?.node && (target.node.kind === "initial" || target.node.kind === "terminal" || target.node.kind === "decision");
           if (graphStage && priority > 0 && target && !lp.badge && (
@@ -4286,7 +4301,7 @@ export function createSpaceViewer(
         const labelRects: ViewRect[] = [...modelRects.values()];
         for (const { l, x, y, priority } of list) {
           if (accepted.length >= (graphStage || bird ? 60 : 28)) break;
-          if (safe && graphStage) {
+          if (safe && (graphStage || bird)) {
             const metrics = stageLabelMetrics(l, safe.right - safe.left);
             const placed = placeWorldLabel(x, y, metrics.width / 2, metrics.height, safe, labelRects, l.ref ? modelRects.get(l.ref) : undefined);
             if (!placed) continue;

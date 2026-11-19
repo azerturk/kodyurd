@@ -15,6 +15,7 @@ import { detectAgents, type AgentId } from "./agents.js";
 import path from "node:path";
 import {
   askGuide,
+  approveSpacePlan,
   atomicJson,
   generationDraftPath,
   getJob,
@@ -28,6 +29,7 @@ import {
   spacePath,
   startOverlayJob,
   startSpaceJob,
+  stopSpaceJob,
   type ProjectRow
 } from "./jobs.js";
 import { AgentError } from "./agents.js";
@@ -73,17 +75,19 @@ interface GenerationSettings {
   focusModule: string | null;
   refreshScan: boolean;
   reuseCache: boolean;
+  reviewPlan: boolean;
 }
 
 function generationSettings(db: SqliteDb, projectId: string): GenerationSettings | undefined {
-  const row = db.prepare("SELECT brief, language, agent, model, focus_module AS focusModule, refresh_scan, reuse_cache FROM project_generation WHERE project_id = ?")
+  const row = db.prepare("SELECT brief, language, agent, model, focus_module AS focusModule, refresh_scan, reuse_cache, review_plan FROM project_generation WHERE project_id = ?")
     .get(projectId) as (Omit<GenerationSettings, "refreshScan" | "reuseCache"> & {
       refresh_scan: number;
       reuse_cache: number;
+      review_plan: number;
     }) | undefined;
   if (!row) return undefined;
-  const { refresh_scan, reuse_cache, ...settings } = row;
-  return { ...settings, refreshScan: refresh_scan === 1, reuseCache: reuse_cache === 1 };
+  const { refresh_scan, reuse_cache, review_plan, ...settings } = row;
+  return { ...settings, refreshScan: refresh_scan === 1, reuseCache: reuse_cache === 1, reviewPlan: review_plan === 1 };
 }
 
 function getProject(db: SqliteDb, id: string): ProjectRow | undefined {
@@ -314,6 +318,7 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
     const focusModule = body.focusModule === null ? undefined : typeof body.focusModule === "string" ? body.focusModule : prior?.focusModule ?? undefined;
     const refreshScan = typeof body.refreshScan === "boolean" ? body.refreshScan : prior?.refreshScan ?? true;
     const fresh = typeof body.fresh === "boolean" ? body.fresh : prior?.reuseCache === false;
+    const reviewPlan = typeof body.reviewPlan === "boolean" ? body.reviewPlan : prior?.reviewPlan ?? false;
     if (typeof body.model === "string" && body.model.trim() && !model) {
       return reply.code(400).send({ error: "Enter a valid model identifier or use the agent default." });
     }
@@ -331,16 +336,60 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
       model,
       focusModule,
       refreshScan,
-      fresh
+      fresh,
+      reviewPlan
     });
     if ("error" in result) return reply.code(409).send({ error: result.error });
     db.prepare(`
-      INSERT INTO project_generation (project_id, brief, language, agent, model, focus_module, refresh_scan, reuse_cache) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO project_generation (project_id, brief, language, agent, model, focus_module, refresh_scan, reuse_cache, review_plan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET
         brief = excluded.brief, language = excluded.language, agent = excluded.agent, model = excluded.model, focus_module = excluded.focus_module,
-        refresh_scan = excluded.refresh_scan, reuse_cache = excluded.reuse_cache
-    `).run(id, brief, language, agent, model ?? null, focusModule ?? null, refreshScan ? 1 : 0, fresh ? 0 : 1);
+        refresh_scan = excluded.refresh_scan, reuse_cache = excluded.reuse_cache, review_plan = excluded.review_plan
+    `).run(id, brief, language, agent, model ?? null, focusModule ?? null, refreshScan ? 1 : 0, fresh ? 0 : 1, reviewPlan ? 1 : 0);
     return { jobId: result.jobId };
+  });
+
+  app.post("/api/projects/:id/jobs/:jobId/stop", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    const job = getJob(db, jobId);
+    if (!getProject(db, id) || !job || job.projectId !== id || job.kind !== "space") {
+      return reply.code(404).send({ error: "Generation job not found." });
+    }
+    if (job.status === "stopped") return { ok: true };
+    if (!stopSpaceJob(db, id, jobId)) return reply.code(409).send({ error: "This generation is no longer running or waiting for review." });
+    return { ok: true };
+  });
+
+  app.post("/api/projects/:id/jobs/:jobId/resume", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    const project = getProject(db, id);
+    const job = getJob(db, jobId);
+    if (!project || !job || job.projectId !== id || job.kind !== "space") return reply.code(404).send({ error: "Generation job not found." });
+    if (!["stopped", "interrupted", "failed"].includes(job.status) || (!job.resumeAvailable && !job.deliverables?.length)) {
+      return reply.code(409).send({ error: "This generation has no saved lesson checkpoint. Generate again to continue." });
+    }
+    const settings = generationSettings(db, id);
+    if (!settings) return reply.code(409).send({ error: "Start a new generation to recover its saved settings." });
+    const result = startSpaceJob({ db, dataDir, project, brief: settings.brief, language: settings.language,
+      agent: settings.agent, resume: { jobId } });
+    if ("error" in result) return reply.code(409).send({ error: result.error });
+    return result;
+  });
+
+  app.post("/api/projects/:id/jobs/:jobId/plan/approve", async (req, reply) => {
+    const { id, jobId } = req.params as { id: string; jobId: string };
+    const project = getProject(db, id);
+    const job = getJob(db, jobId);
+    if (!project || !job || job.projectId !== id || job.kind !== "space") return reply.code(404).send({ error: "Generation job not found." });
+    try {
+      const approvedLessons = await approveSpacePlan(dataDir, project, job, (req.body as { lessons?: unknown } | undefined)?.lessons);
+      const result = startSpaceJob({ db, dataDir, project, brief: "", language: "en", agent: "api", resume: { jobId }, approvedLessons });
+      if ("error" in result) return reply.code(409).send({ error: result.error });
+      return result;
+    } catch (error) {
+      if (!(error instanceof AgentError)) throw error;
+      return reply.code(error.code === "PLAN_SELECTION_INVALID" ? 400 : 409).send({ error: error.message });
+    }
   });
 
   app.post("/api/projects/:id/jobs/:jobId/deliverables/:deliverableId/retry", async (req, reply) => {
@@ -350,11 +399,11 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
     if (!project || !job || job.projectId !== id || job.kind !== "space") {
       return reply.code(404).send({ error: "Generation job not found." });
     }
-    if (job.status === "queued" || job.status === "running") return reply.code(409).send(WORKSPACE_BUSY);
+    if (["queued", "running", "stopping", "awaiting-review"].includes(job.status)) return reply.code(409).send(WORKSPACE_BUSY);
     const deliverable = job.deliverables?.find((item) => item.id === deliverableId);
     const replace = (req.body as { replace?: unknown } | undefined)?.replace === true;
     if (!deliverable || (!["pending", "failed", "timed-out"].includes(deliverable.state) &&
-      !(job.status === "interrupted" && deliverable.state === "running") && !(replace && deliverable.state === "ready"))) {
+      !(["interrupted", "stopped"].includes(job.status) && deliverable.state === "running") && !(replace && deliverable.state === "ready"))) {
       return reply.code(409).send({ error: "This focus artifact is not available to retry." });
     }
     const settings = generationSettings(db, id);
@@ -426,7 +475,7 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
     const known = original ?? (await readDiagramEdits(dataDir, id)).find((diagram) => diagram.id === targetId);
     if (diagramId && !known) throw new AgentError("DIAGRAM_NOT_FOUND", "This diagram is no longer part of the city.");
     const diagram = userDiagram(input, saved.space, targetId, original);
-    await saveDiagramEdit(dataDir, id, diagram);
+    await saveDiagramEdit(dataDir, id, diagram, original ?? null);
     return { diagram };
   };
   const diagramRoute = async (id: string, reply: FastifyReply, work: () => Promise<unknown>) => {

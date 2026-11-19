@@ -1,0 +1,14 @@
+.studio-plan-options { min-width: 0; border: 0; margin: .7rem 0; padding: 0; display: grid; gap: .5rem; }
+.studio-plan-building { min-width: 0; padding: .7rem; border: 1px solid var(--studio-line); border-radius: .6rem; }
+.studio-plan-building > p { overflow-wrap: anywhere; }
+.studio-plan-building summary { cursor: pointer; color: var(--studio-muted); font-size: var(--studio-detail); }
+.studio-plan-views { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .3rem; margin-top: .4rem; }
+.studio-job-buildings { display: grid; gap: .7rem; }
+.studio-job-building { border: 1px solid var(--studio-line); border-radius: .6rem; padding: .65rem; }
+.studio-job-building > h3 { display: flex; justify-content: space-between; gap: .5rem; margin: 0; font-size: var(--studio-label); }
+.studio-job-building > h3 small { white-space: nowrap; font-size: var(--studio-detail); color: var(--studio-muted); }
+.studio-brief-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: .5rem 0; }
+.studio-brief-tools .studio-button { min-height: 2rem; padding: .3rem .5rem; font-size: var(--studio-detail); }
+.studio-brief-count { margin-left: auto; color: var(--studio-muted); font-size: var(--studio-detail); }
+.studio-brief-examples { margin-bottom: .6rem; }
+.studio-brief-examples summary { cursor: pointer; color: var(--studio-muted); font-size: var(--studio-detail); }

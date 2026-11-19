@@ -536,7 +536,10 @@ test("Guide keeps the selected step and supplies exact comparison evidence from 
     await fs.mkdir(projectDir(dataDir, project.id), { recursive: true });
     await fs.writeFile(path.join(sourceDir, sourcePath), lines.join("\n"));
     await fs.writeFile(spacePath(dataDir, project.id), JSON.stringify({ space: {
-      city: { buildings: [{ id: "lab", moduleRef: "(root)" }] }, diagrams: [], flows: [flow]
+      version: "0.2", meta: { name: "Measurement fixture", sourceDir, createdAt: "2026-11-19" },
+      city: { districts: [{ id: "lab-district", title: "Measurements" }],
+        buildings: [{ id: "lab", moduleRef: "(root)", title: "Lab", district: "lab-district", summary: "Compares calibrated measurements." }] },
+      diagrams: [], flows: [flow]
     } }));
     process.env.ANTHROPIC_API_KEY = "fixture-only";
     globalThis.fetch = async (_, opts) => {

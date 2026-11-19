@@ -70,6 +70,11 @@ The schema is the **security boundary**: runtime agents output only this JSON, a
   the assembled city. Use `scenario`, `step` and zero-based `stepIndex` together
   to point to an exact occurrence. Legacy links open only if their step resolves
   to a single occurrence. The UI offers scenario start when a link is ambiguous.
+- New city assembly namespaces provider-local question IDs by canonical module,
+  deliverable and local ID. Reading an existing city never rewrites its question IDs.
+  The city-wide limits of 64 questions and 40 tour stops are shared across modules;
+  generation reports content omitted by those limits instead of silently favouring
+  the first lesson.
 
 ## Shape (v0.1 — upgrade input only, no longer generated)
 

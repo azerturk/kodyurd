@@ -1,12 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Camera, GraphNode, PROJECTION_ORTHOGRAPHIC, PROJECTION_PERSPECTIVE, ASPECT_MANUAL, Vec3 } from "playcanvas";
-import { labelPosition, distanceToSegment, fitArrivalView, fitClearArrivalView, fitOrthographic, placeWorldLabel, viewRect } from "../src/viewer/view-projection.ts";
+import { labelPosition, distanceToSegment, fitArrivalView, fitClearArrivalView, fitOrthographic, placeWorldLabel, readableNameplate, viewRect } from "../src/viewer/view-projection.ts";
 import { fitDisplayCopy, workshopExhibits, wrapDisplayCopy } from "../src/viewer/exhibit-layout.ts";
 import { clearBoom } from "../src/viewer/walk-path.ts";
 
 const width = 1280;
 const height = 720;
+
+test("physical nameplates replace floating copy only when the entire projected text face is readable", () => {
+  const viewport = { left: 0, top: 0, right: 400, bottom: 200 };
+  const corners = [{ x: 50, y: 30 }, { x: 250, y: 30 }, { x: 250, y: 70 }, { x: 50, y: 70 }];
+  const raster = { fontSize: 20, textureWidth: 256, textureHeight: 40, lines: 1 };
+  assert.equal(readableNameplate(corners, raster, viewport), true);
+  assert.equal(readableNameplate(corners, raster, { ...viewport, left: 60 }), false, "partly covered text still needs its floating label");
+  assert.equal(readableNameplate(corners.map(({ x, y }) => ({ x: x / 5, y })), raster, viewport), false);
+  assert.equal(readableNameplate([{ x: 50, y: 30 }, { x: 250, y: 100 }, { x: 250, y: 104 }, { x: 50, y: 34 }], raster, viewport), false,
+    "a tall diagonal cannot stand in for the four-pixel text height of an oblique plate");
+  const singleLine = [{ x: 25, y: 30 }, { x: 345, y: 30 }, { x: 345, y: 62 }, { x: 25, y: 62 }];
+  assert.equal(readableNameplate(singleLine, { fontSize: 24, textureWidth: 448, textureHeight: 44, lines: 1 }, viewport), true,
+    "a long fitted single line is readable on the 32-pixel physical face observed in the Docs map");
+  assert.equal(readableNameplate(singleLine, { fontSize: 12, textureWidth: 448, textureHeight: 44, lines: 2 }, viewport), false,
+    "two lines with smaller fitted glyphs still need a floating label on that same face");
+  assert.equal(readableNameplate(corners, { ...raster, fontSize: 6 }, viewport), false);
+});
 
 test("billboard and projected label copy keep every character on long technical lines", () => {
   const name = "bindProfileFormAndRenderDetailedValidationStatus";

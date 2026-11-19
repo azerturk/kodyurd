@@ -31,8 +31,10 @@ Harbor Desk is the included example workspace. It models office reservations and
 ## Explore and share
 
 - **The brief** decides which buildings you can enter. Each part it asks about gets a lesson: at least two buildings, up to ten in one run, and **Build the remaining** adds the rest.
+- **Generation controls** can pause the plan for a lesson review, stop a running generation, and resume from accepted work. Job details group the deliverables by building.
+- **City map** distinguishes districts and marks buildings with lessons. Select a building for its connections; the directory keeps their full names. **Hide details** gives diagrams and replays more room while playback controls remain available.
 - **Explore architecture** opens the focused module's diagram. **Diagrams** lists component, behavior and data views that are available for this city.
-- **Edit diagram** corrects a diagram, and **Draw or import a diagram** adds your own from scratch, Mermaid text or a diagrams.net file. Any diagram can be copied as Mermaid or downloaded as `.drawio`.
+- **Edit diagram** offers a preview, undo and redo. **Draw or import a diagram** adds your own from scratch, Mermaid text or a diagrams.net file. Unchanged content keeps its citations; changed meanings need new evidence. Any diagram can be copied as Mermaid or downloaded as `.drawio`.
 - **Replay scenario** opens the playable examples supported by source evidence. **Learn** contains tours, practice and exams.
 - **Docs** and diagram evidence open excerpts in the city or at a validated line in your editor.
 - **Saved cities** keeps the latest city of each brief, so you can return to one without generating again.

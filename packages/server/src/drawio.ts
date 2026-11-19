@@ -23,7 +23,8 @@ function decode(value: string): string {
 /** A shape label is often HTML; keep its words only. */
 function label(value: string | undefined, max: number): string | undefined {
   if (!value) return undefined;
-  const text = decode(decode(value).replace(/<[^>]{0,400}>/g, " ")).replace(/[\u0000-\u001f<>"\\]/g, " ").replace(/\s+/g, " ").trim();
+  // Decode XML before removing HTML, then decode its text. Escaped literal brackets remain text.
+  const text = decode(decode(value).replace(/<[^>]{0,400}>/g, " ")).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
   return text ? text.slice(0, max).trim() : undefined;
 }
 
@@ -87,8 +88,8 @@ export function parseDrawio(xml: string, owner: string, title: string): Diagram 
     id: nodeId.get(cell.id)!, label: label(cell.value, 60)!,
     group: cell.parent && containers.has(cell.parent) ? label(byId.get(cell.parent)?.value, 40) : undefined
   }));
-  const edges = cells.filter((cell) => cell.edge && cell.source && cell.target && nodeId.has(cell.source) && nodeId.has(cell.target)
-    && cell.source !== cell.target).slice(0, 80).map((cell, index) => ({
+  const edges = cells.filter((cell) => cell.edge && cell.source && cell.target && nodeId.has(cell.source) && nodeId.has(cell.target))
+    .slice(0, 80).map((cell, index) => ({
     id: `e${index + 1}`, from: nodeId.get(cell.source!)!, to: nodeId.get(cell.target!)!,
     label: label(cell.value, 48) ?? edgeLabels.get(cell.id),
     kind: /(?:^|;)dashed=1(?:;|$)/.test(cell.style) ? "dashed" as const : undefined

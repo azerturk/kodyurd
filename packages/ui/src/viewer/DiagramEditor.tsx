@@ -1,7 +1,12 @@
-import { useState } from "react";
-import type { SpaceDiagram } from "../space-types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { DiagramEditStatus, SpaceDiagram } from "../space-types";
+import StudioDialog from "../screens/StudioDialog";
+import { DiagramDraftPreview } from "./DiagramDraftPreview";
+import { DiagramEditNotice } from "./DiagramEditNotice";
 import { diagramTitle } from "./diagram-explanation";
-import { toDrawio, toMermaid } from "./diagram-export";
+import { mermaidExportWarnings, toDrawio, toMermaid } from "./diagram-export";
+import { diagramChanges, editorProblem, editorSnapshot, editorValue, recordEditor, redoEditor, undoEditor, type EditorHistory } from "./diagram-editor-state";
+import "./diagram-editor.css";
 
 type Node = SpaceDiagram["nodes"][number];
 type Edge = SpaceDiagram["edges"][number];
@@ -43,23 +48,8 @@ export function starterDiagram(kind: Kind, owner: string, title: string): SpaceD
   return { id: "new", owner, title, kind, nodes, edges, origin: "user" };
 }
 
-const fieldsText = (node: Node): string => (node.fields ?? []).map(({ name, type, keys }) =>
-  `${name}: ${type}${keys?.length ? ` ${keys.join(" ")}` : ""}`).join("\n");
-
-function readFields(text: string, keyed: boolean): Node["fields"] {
-  const fields = text.split("\n").flatMap((line) => {
-    const at = line.lastIndexOf(":");
-    const name = (at > 0 ? line.slice(0, at) : line).trim().slice(0, 64);
-    const words = (at > 0 ? line.slice(at + 1) : "").trim().split(/\s+/).filter(Boolean);
-    const keys = keyed ? words.filter((item): item is "PK" | "FK" | "UK" => item === "PK" || item === "FK" || item === "UK") : [];
-    const type = words.filter((item) => !keys.includes(item as "PK")).join(" ").slice(0, 60) || (keyed ? "TEXT" : "value");
-    return name ? [{ name, type, keys: keys.length ? keys : undefined }] : [];
-  });
-  return fields.length ? fields.filter(({ name }, index) => fields.findIndex((item) => item.name === name) === index).slice(0, 40) : undefined;
-}
-
 /** Corrects, draws and exports one diagram. Saving sends it through the same schema gate as generated diagrams. */
-export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings, save, restore, close }: {
+export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings, save, restore, close, baseStatus }: {
   diagram: SpaceDiagram;
   /** Not saved yet: a new drawing or an import. */
   isNew: boolean;
@@ -70,14 +60,55 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
   save: (diagram: SpaceDiagram) => Promise<void>;
   restore?: () => Promise<void>;
   close: () => void;
+  baseStatus?: DiagramEditStatus;
 }) {
-  const [draft, setDraft] = useState<SpaceDiagram>(diagram);
-  const [fieldText, setFieldText] = useState<Record<string, string>>(() => Object.fromEntries(diagram.nodes.map((node) => [node.id, fieldsText(node)])));
+  const [history, setHistory] = useState<EditorHistory>(() => ({ past: [], present: editorSnapshot(diagram), future: [] }));
+  const { diagram: draft, fieldText } = history.present;
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [confirmation, setConfirmation] = useState<"close" | "restore">();
+  const titleInput = useRef<HTMLInputElement>(null);
   const kind = draft.kind;
   const hints = HINTS[kind];
   const generated = !isNew && !diagram.id.startsWith("user-");
+  const restoreGenerated = generated && baseStatus?.state !== "missing" && baseStatus?.hasGenerated !== false;
+  const next = editorValue(history.present);
+  const changes = diagramChanges(diagram, next);
+  const dirty = isNew || JSON.stringify(editorSnapshot(diagram)) !== JSON.stringify(history.present);
+  const exportWarnings = mermaidExportWarnings(next);
+  const setDraft = (update: SpaceDiagram | ((current: SpaceDiagram) => SpaceDiagram)): void => setHistory((current) =>
+    recordEditor(current, { ...current.present, diagram: typeof update === "function" ? update(current.present.diagram) : update }));
+  const setFieldText = (update: Record<string, string>): void => setHistory((current) =>
+    recordEditor(current, { ...current.present, fieldText: update }));
+  const requestClose = useCallback((): void => {
+    if (working) return;
+    if (dirty) setConfirmation("close");
+    else close();
+  }, [working, dirty, close]);
+
+  useEffect(() => { titleInput.current?.focus(); }, []);
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent): void => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (confirmation) return;
+      if (event.code === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        requestClose();
+      } else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyZ" && !working) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setHistory(event.shiftKey ? redoEditor : undoEditor);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [confirmation, requestClose, working]);
 
   const setNode = (id: string, change: Partial<Node>): void =>
     setDraft((current) => ({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...change } : node) }));
@@ -85,7 +116,8 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
     setDraft((current) => ({ ...current, edges: current.edges.map((edge, at) => at === index ? { ...edge, ...change } : edge) }));
   const addNode = (): void => setDraft((current) => {
     let number = current.nodes.length + 1;
-    while (current.nodes.some(({ id }) => id === `item-${number}`)) number++;
+    while (current.nodes.some(({ id }) => id === `item-${number}`) || diagram.nodes.some(({ id }) => id === `item-${number}`)
+      || Object.hasOwn(fieldText, `item-${number}`)) number++;
     return { ...current, nodes: [...current.nodes, { id: `item-${number}`, label: `Item ${number}` }] };
   });
   const removeNode = (id: string): void => setDraft((current) => ({
@@ -101,19 +133,6 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
     }] };
   });
 
-  /** The draft as it will be sent: blank labels dropped, field text read back into fields. */
-  const result = (): SpaceDiagram => {
-    const nodes = draft.nodes.filter(({ label }) => label.trim()).map((node) => ({
-      ...node, label: node.label.trim(), group: node.group?.trim() || undefined,
-      fields: withFields(kind) ? readFields(fieldText[node.id] ?? "", kind === "erd") : undefined
-    }));
-    const ids = new Set(nodes.map(({ id }) => id));
-    const edges = draft.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to) && edge.from !== edge.to).map((edge) => ({
-      ...edge, label: edge.label?.trim() || undefined, guard: edge.guard?.trim() || undefined,
-      cardinality: kind === "erd" ? edge.cardinality ?? { from: "1" as const, to: "0..*" as const } : undefined
-    }));
-    return { ...draft, title: draft.title.trim(), note: draft.note?.trim() || undefined, nodes, edges };
-  };
   const run = (action: () => Promise<void>): void => {
     setWorking(true);
     setMessage(undefined);
@@ -121,13 +140,12 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
       .finally(() => setWorking(false));
   };
   const submit = (): void => {
-    const next = result();
-    if (!next.title) return setMessage("Give the diagram a title.");
-    if (next.nodes.length < (kind === "erd" ? 1 : 2)) return setMessage("A diagram needs at least two named items.");
+    const problem = editorProblem(next);
+    if (problem) return setMessage(problem);
     run(() => save(next));
   };
   const download = (): void => {
-    const url = URL.createObjectURL(new Blob([toDrawio(result(), positions)], { type: "application/xml" }));
+    const url = URL.createObjectURL(new Blob([toDrawio(next, positions)], { type: "application/xml" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = `${draft.title.trim().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 60) || "diagram"}.drawio`;
@@ -135,24 +153,36 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
     URL.revokeObjectURL(url);
   };
   const copyMermaid = (): void => {
-    navigator.clipboard.writeText(toMermaid(result())).then(() => setMessage("Mermaid text copied."),
+    navigator.clipboard.writeText(toMermaid(next)).then(() => setMessage("Mermaid text copied."),
       () => setMessage("The browser did not allow copying. Select the text in a document instead."));
   };
 
-  return <aside className="kd-learn-card kd-replay-inspector kd-explanation kd-diagram-editor" aria-label="Diagram editor">
+  return <><aside className="kd-learn-card kd-replay-inspector kd-explanation kd-diagram-editor" aria-label="Diagram editor">
     <div className="kd-learn-heading">
       <div className="kd-learn-eyebrow"><span /> {isNew ? "New diagram" : "Edit diagram"} · {diagramTitle(draft)}</div>
-      <button type="button" className="kd-learn-icon" onClick={close} aria-label="Close editor">×</button>
+      <button type="button" className="kd-learn-icon" onClick={requestClose} disabled={working} aria-label="Close editor">×</button>
     </div>
     <p className="kd-lesson-muted">{generated
-      ? "Items you keep hold their source citations. Items and links you add have none."
-      : "This diagram is yours: it shows no source citations."}</p>
+      ? "Unchanged items keep their evidence. Changed items are marked as your corrections."
+      : "Your additions have no generated source citations."}</p>
+    <DiagramEditNotice status={baseStatus} editable={canRestore} />
+    <div className="kd-editor-toolbar">
+      <button type="button" className="kd-learn-action" disabled={working || !history.past.length} onClick={() => setHistory(undoEditor)} title="Ctrl+Z">Undo</button>
+      <button type="button" className="kd-learn-action" disabled={working || !history.future.length} onClick={() => setHistory(redoEditor)} title="Ctrl+Shift+Z">Redo</button>
+      <span role="status">{isNew ? "Unsaved diagram" : dirty ? "Unsaved changes" : "No changes"}</span>
+    </div>
+    <fieldset className="kd-editor-controls" disabled={working}>
     <label className="kd-editor-field">Title
-      <input value={draft.title} maxLength={100} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+      <input ref={titleInput} value={draft.title} maxLength={100} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
     </label>
     {isNew && <div className="kd-editor-row">
       <label className="kd-editor-field">Kind
-        <select value={kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as Kind })}>
+        <select value={kind} onChange={(event) => {
+          const nextKind = event.target.value as Kind;
+          setDraft({ ...draft, kind: nextKind, edges: nextKind === "erd" ? draft.edges.map((edge) => ({
+            ...edge, cardinality: edge.cardinality ?? { from: "1", to: "0..*" }
+          })) : draft.edges });
+        }}>
           {EDITABLE_KINDS.map((item) => <option key={item.kind} value={item.kind}>{item.label}</option>)}
         </select>
       </label>
@@ -172,7 +202,7 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
       <ul className="kd-editor-list">
         {draft.nodes.map((node) => <li key={node.id}>
           <div className="kd-editor-row">
-            <input aria-label="Item name" value={node.label} maxLength={withFields(kind) ? 64 : 60}
+            <input aria-label="Item name" value={node.label} maxLength={kind === "matrix" ? 140 : withFields(kind) ? 64 : 60}
               onChange={(event) => setNode(node.id, { label: event.target.value })} />
             <button type="button" className="kd-learn-icon" aria-label={`Remove ${node.label}`} onClick={() => removeNode(node.id)}>×</button>
           </div>
@@ -210,7 +240,7 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
           <div className="kd-editor-row">
             <input aria-label="Link label" placeholder="Label" value={edge.label ?? ""} maxLength={48}
               onChange={(event) => setEdge(index, { label: event.target.value })} />
-            {kind === "erd" ? <>
+            {(kind === "erd" || kind === "class" && edge.cardinality) ? <>
               <select aria-label="Cardinality at the start" value={edge.cardinality?.from ?? "1"}
                 onChange={(event) => setEdge(index, { cardinality: { from: event.target.value as Cardinality, to: edge.cardinality?.to ?? "0..*" } })}>
                 {CARDINALITIES.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -223,24 +253,46 @@ export function DiagramEditor({ diagram, isNew, canRestore, positions, buildings
               {LINES.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>}
           </div>
+          {(kind === "state" || edge.guard) && <input aria-label="Link condition" placeholder="Condition" value={edge.guard ?? ""} maxLength={80}
+            onChange={(event) => setEdge(index, { guard: event.target.value })} />}
         </li>)}
       </ul>
       <button type="button" className="kd-learn-action" onClick={addEdge} disabled={draft.nodes.length < 2 || draft.edges.length >= 80}>Add link</button>
     </section>}
 
+    </fieldset>
+    <DiagramDraftPreview diagram={next} />
+    {changes.length > 0 && <details className="kd-editor-changes"><summary>Changes before saving · {changes.length}</summary>
+      <ul>{changes.map((change) => <li key={change}>{change}</li>)}</ul>
+    </details>}
     {message && <p role="status" className="kd-editor-message">{message}</p>}
     <div className="kd-lesson-actions">
       <button type="button" className="kd-learn-action kd-editor-save" onClick={submit} disabled={working}>{working ? "Saving…" : "Save diagram"}</button>
-      <button type="button" className="kd-learn-action" onClick={close} disabled={working}>Cancel</button>
+      <button type="button" className="kd-learn-action" onClick={requestClose} disabled={working}>Cancel</button>
     </div>
     <div className="kd-lesson-actions">
       <button type="button" className="kd-learn-action" onClick={copyMermaid}>Copy as Mermaid</button>
       <button type="button" className="kd-learn-action" onClick={download}>Download .drawio</button>
     </div>
+    <p className="kd-editor-export-note">{exportWarnings.join(" ")} Mermaid simplifies punctuation and some notation details. Citations and Explain claims stay in Kodyurd. diagrams.net keeps a graph with field text; it does not preserve every notation.</p>
     {canRestore && restore && <div className="kd-lesson-actions">
-      <button type="button" className="kd-learn-action" onClick={() => run(restore)} disabled={working}>
-        {generated ? "Restore the generated diagram" : "Delete this diagram"}
+      <button type="button" className="kd-learn-action" onClick={() => setConfirmation("restore")} disabled={working}>
+        {restoreGenerated ? "Restore current generated diagram" : "Remove saved diagram"}
       </button>
     </div>}
-  </aside>;
+  </aside>
+    {confirmation && <StudioDialog title={confirmation === "close" ? "Discard unsaved changes?" : restoreGenerated ? "Restore current generated diagram?" : "Remove this saved diagram?"}
+      onClose={() => setConfirmation(undefined)} busy={working}>
+      <p>{confirmation === "close" ? "Your changes have not been saved." : restoreGenerated ? "Your saved corrections will be replaced by the current generated diagram." : "This saved diagram will be removed from the city."}</p>
+      <div className="studio-actions">
+        <button type="button" className="studio-button" data-initial-focus onClick={() => setConfirmation(undefined)}>Keep editing</button>
+        <button type="button" className="studio-button" onClick={() => {
+          const action = confirmation;
+          setConfirmation(undefined);
+          if (action === "close") close();
+          else if (restore) run(restore);
+        }}>{confirmation === "close" ? "Discard changes" : restoreGenerated ? "Restore diagram" : "Remove diagram"}</button>
+      </div>
+    </StudioDialog>}
+  </>;
 }

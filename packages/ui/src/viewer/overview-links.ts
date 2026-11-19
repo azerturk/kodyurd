@@ -7,12 +7,12 @@ interface Footprint {
   size: { w: number; d: number };
 }
 
-/** The map opens as an architectural view. Request a neighborhood or one exact link. */
+/** A bounded overview gives orientation; selecting a building reveals its neighborhood. */
 export function visibleOverviewLinks<T extends Pick<CityRelationship, "id" | "from" | "to">>(
   links: readonly T[], buildingId?: string, linkId?: string
 ): T[] {
   if (linkId) return links.filter((link) => link.id === linkId);
-  return buildingId ? links.filter((link) => link.from === buildingId || link.to === buildingId).slice(0, 8) : [];
+  return buildingId ? links.filter((link) => link.from === buildingId || link.to === buildingId).slice(0, 8) : links.slice(0, 6);
 }
 
 function ports(building: Footprint, toward: WalkPoint, lane: number): WalkPoint[] {

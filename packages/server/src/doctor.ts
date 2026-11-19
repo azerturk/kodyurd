@@ -27,6 +27,47 @@ export function checkCommand(cmd: string): { found: boolean; detail: string } {
   }
 }
 
+const adapterChecks = new Map<string, { checkedAt: number; result: { found: boolean; detail: string } }>();
+
+/** Help/version probes never read a workspace or send an inference request. */
+export function checkAgentCommand(agent: "claude" | "codex"): { found: boolean; detail: string } {
+  const version = checkCommand(agent);
+  if (!version.found) return version;
+  const key = JSON.stringify([agent, process.env.PATH, version.detail]);
+  const cached = adapterChecks.get(key);
+  if (cached && Date.now() - cached.checkedAt < 60_000) return cached.result;
+  const help = (args: string[]): string | undefined => {
+    const command = localCommand(agent, args);
+    if (!command) return undefined;
+    try {
+      const result = spawnSync(command.file, command.args, {
+        windowsVerbatimArguments: command.windowsVerbatimArguments, windowsHide: true,
+        encoding: "utf8", timeout: 5_000, maxBuffer: 256 * 1024
+      });
+      return !result.error && result.status === 0 ? `${result.stdout ?? ""}\n${result.stderr ?? ""}` : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const root = help(["--help"]);
+  const execution = agent === "codex" ? help(["exec", "--help"]) : root;
+  const commonFlags = agent === "claude"
+    ? ["--output-format", "--verbose", "--safe-mode", "--restricted", "--strict-mcp-config", "--no-session-persistence", "--permission-mode", "--tools"]
+    : ["--ask-for-approval", "--disable"];
+  const executionFlags = agent === "codex"
+    ? ["--skip-git-repo-check", "--sandbox", "--ephemeral", "--ignore-user-config", "--ignore-rules"] : [];
+  const supported = root !== undefined && execution !== undefined &&
+    commonFlags.every((flag) => root.includes(flag)) && executionFlags.every((flag) => execution.includes(flag)) &&
+    (agent !== "codex" || root.includes("--config") || /(?:^|\s)-c(?:\s|,)/m.test(root));
+  const result = supported ? version : {
+    found: false,
+    detail: `${agent} is installed; its help does not confirm the runner's required isolation flags. Update the CLI.`
+  };
+  if (adapterChecks.size >= 20) adapterChecks.clear();
+  adapterChecks.set(key, { checkedAt: Date.now(), result });
+  return result;
+}
+
 /**
  * Environment check. Generation needs at least one available agent.
  */
@@ -40,10 +81,10 @@ export function runDoctor(dataDir?: string): DoctorCheck[] {
     optional: false
   });
 
-  const claude = checkCommand("claude");
+  const claude = checkAgentCommand("claude");
   checks.push({ name: "Claude CLI", ...claude, optional: true });
 
-  const codex = checkCommand("codex");
+  const codex = checkAgentCommand("codex");
   checks.push({ name: "Codex CLI", ...codex, optional: true });
 
   const anthropicKey = Boolean(getAnthropicKey(dataDir));

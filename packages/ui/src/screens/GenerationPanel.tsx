@@ -1,4 +1,10 @@
-import type { GenerationDeliverable, JobStage, JobView } from "../api";
+import { useEffect, useState } from "react";
+import { api } from "../api";
+import type { GenerationDeliverable, JobStage, JobView, LessonView } from "../api";
+import { deliverableGroups, elapsedJob, isJobActive, isRunning, jobStatus } from "./generation-view";
+import { PlanReview } from "./PlanReview";
+import { hasJobFailure, jobDiagnostics } from "./job-diagnostics";
+import "./generation-panel.css";
 
 const DELIVERABLE_LABELS: Record<GenerationDeliverable["state"], string> = {
   pending: "Pending", running: "Running", ready: "Ready", failed: "Failed", "timed-out": "Timed out"
@@ -12,8 +18,7 @@ const PHASES: { id: NonNullable<JobStage["phase"]>; label: string }[] = [
   { id: "quality", label: "Quality check" }
 ];
 
-export const isRunning = (job: JobView | null): boolean =>
-  job?.status === "queued" || job?.status === "running";
+export { isJobActive, isRunning } from "./generation-view";
 
 /** A building id such as `b-reservations` reads as its title when no title is known. */
 export function focusTitle(title: string | undefined): string {
@@ -23,14 +28,44 @@ export function focusTitle(title: string | undefined): string {
 }
 
 /** Progress, selected evidence and outputs of one generation or personal-model job. */
-export default function GenerationPanel({ job, busy, onRetry, onContinue, onPreview }: {
+export default function GenerationPanel({ job, busy, onRetry, onContinue, onPreview, onStop, onResume, onApprove }: {
   job: JobView;
   busy: boolean;
   onRetry: (deliverableId: string) => void;
   onContinue: () => void;
   onPreview: (artifact?: string) => void;
+  onStop: () => void;
+  onResume: () => void;
+  onApprove: (lessons: { building: string; views: LessonView[] }[]) => void;
 }) {
   const running = isRunning(job);
+  const active = isJobActive(job);
+  const [now, setNow] = useState(Date.now);
+  const [copying, setCopying] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string>();
+  useEffect(() => { setCopyNotice(undefined); }, [job.id]);
+  const copyDiagnostics = async (): Promise<void> => {
+    if (copying) return;
+    setCopying(true);
+    setCopyNotice(undefined);
+    const controller = new AbortController();
+    const deadline = window.setTimeout(() => controller.abort(), 5000);
+    try {
+      const health = await api.health(controller.signal).catch(() => undefined);
+      await navigator.clipboard.writeText(jobDiagnostics(job, health?.version, navigator.userAgent));
+      setCopyNotice(health ? "Diagnostics copied." : "Diagnostics copied. App version was unavailable.");
+    } catch {
+      setCopyNotice("Could not copy diagnostics. Check clipboard access and try again.");
+    } finally {
+      window.clearTimeout(deadline);
+      setCopying(false);
+    }
+  };
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running, job.id]);
   const focused = job.stages.filter((stage) => stage.focus);
   const focusBuilding = focused.at(-1)?.building ?? job.quality?.focusBuilding;
   const focusStages = focused.length ? focused : job.stages.filter((stage) => stage.building && stage.building === focusBuilding);
@@ -40,19 +75,27 @@ export default function GenerationPanel({ job, busy, onRetry, onContinue, onPrev
   const outputs = focusLatestFirst.find((stage) => stage.outputs?.length)?.outputs ?? [];
   const lastPhase = latestFirst.find((stage) => stage.phase)?.phase;
   const deliverables = job.deliverables ?? [];
-  const status = job.focusReady ? "ready" : job.quality?.status ?? job.status;
+  const status = job.status === "done" ? job.quality?.status ?? "ready" : job.status;
+  const elapsed = elapsedJob(job, now);
+  const groups = deliverableGroups(job);
   return (
     <>
+      {job.status === "awaiting-review" && job.planReview && <PlanReview key={job.id} plan={job.planReview} busy={busy} approve={onApprove} />}
       <div className="studio-grid studio-job-grid">
         <section className="studio-panel" aria-label="Generation progress">
           <div className="studio-section-title">
             <h2>{job.kind === "space" ? "Generation job" : "Personal model"}</h2>
             <span className={`studio-status studio-status-${status}`}>
-              {job.focusReady ? "Focus ready" : job.quality?.status === "partial" ? "Partial" : job.quality?.status === "pending" ? "Focus pending"
-                : running ? "Running" : job.status === "done" ? "Complete"
-                  : job.status === "interrupted" ? "Interrupted" : "Failed"}
+              {jobStatus(job)}
             </span>
           </div>
+          {elapsed && <p className="studio-muted">Elapsed · {elapsed}</p>}
+          {job.kind === "space" && <div className="studio-actions">
+            {(job.status === "queued" || job.status === "running") && <button type="button" className="studio-button" onClick={onStop} disabled={busy}>Stop generation</button>}
+            {job.status === "awaiting-review" && <button type="button" className="studio-button" onClick={onStop} disabled={busy}>Stop this plan</button>}
+            {job.status === "stopping" && <p role="status" className="studio-muted">Stopping the current request and keeping accepted work…</p>}
+            {job.resumeAvailable && ["stopped", "interrupted", "failed"].includes(job.status) && <button type="button" className="studio-button studio-primary" onClick={onResume} disabled={busy}>Resume generation</button>}
+          </div>}
           {job.kind === "space" && (
             <ol className="studio-steps">
               {PHASES.map(({ id, label }) => {
@@ -74,11 +117,19 @@ export default function GenerationPanel({ job, busy, onRetry, onContinue, onPrev
             </ol>
           )}
           {job.status === "interrupted" && (
-            <p className="studio-muted">The local app stopped during this run. Generate again to continue with cached work.</p>
+            <p className="studio-muted">The local app stopped during this run. {job.resumeAvailable ? "Resume to continue from accepted work." : "Generate again to continue with cached work."}</p>
           )}
+          {job.status === "stopped" && <p className="studio-muted">Generation stopped. Accepted work and the saved city are kept.</p>}
+          {job.status === "awaiting-review" && <p role="status" className="studio-muted">The city plan is ready. Review the lesson selection before any lesson requests start.</p>}
           {job.quality?.keptPrevious && <p className="studio-muted">Your previous city is still available while the new focus is incomplete.</p>}
           {job.focusReady && running && <p className="studio-ok">The focus is ready to open. More buildings from the brief are being added.</p>}
           {job.error && <p role="alert" className="studio-alert">{job.error.message}</p>}
+          {hasJobFailure(job) && <div className="studio-actions">
+            <button type="button" className="studio-button studio-small" onClick={() => { void copyDiagnostics(); }} disabled={copying}>
+              {copying ? "Copying diagnostics…" : "Copy diagnostics"}
+            </button>
+            {copyNotice && <p role="status" className="studio-muted">{copyNotice}</p>}
+          </div>}
         </section>
         <section className="studio-panel studio-job-focus" aria-label="Selected evidence">
           <p className="studio-eyebrow">Focus and evidence</p>
@@ -92,22 +143,24 @@ export default function GenerationPanel({ job, busy, onRetry, onContinue, onPrev
             </div>
           )}
           {deliverables.length > 0 && (
-            <ul className="studio-deliverables">
-              {deliverables.map((item) => {
+            <div className="studio-job-buildings">
+              {groups.map((group) => <section className="studio-job-building" key={group.id} aria-label={`${group.title} lessons`}>
+                <h3>{group.title}<small>{group.items.filter((item) => item.state === "ready").length}/{group.items.length} ready</small></h3>
+                <ul className="studio-deliverables">
+              {group.items.map((item) => {
                 const interrupted = job.status === "interrupted" && item.state === "running";
-                const retryable = !running && item.state !== "ready" && (item.state !== "running" || interrupted);
+                const retryable = !active && job.status !== "stopped" && item.state !== "ready" && (item.state !== "running" || interrupted);
                 const artifact = latestFirst.find((stage) => stage.deliverableId === item.id && stage.outputs?.length)?.outputs
                   ?.find((output) => output.kind === (item.kind === "scenario" ? "flow" : "diagram"))?.ref;
                 return (
                   <li key={item.id} data-state={interrupted ? "interrupted" : item.state}>
                     <div className="studio-deliverable-title">
-                      <strong>{item.title}</strong>
+                      <strong>{item.title.startsWith(`${group.title} · `) ? item.title.slice(group.title.length + 3) : item.title}</strong>
                       <span className={`studio-status studio-status-${interrupted ? "interrupted" : item.state}`}>
                         {interrupted ? "Interrupted" : DELIVERABLE_LABELS[item.state]}
                       </span>
                     </div>
                     {item.error && <p className="studio-muted">{item.error}</p>}
-                    {item.reference && <small className="studio-muted">Visual reference · {item.reference}</small>}
                     {item.state === "ready" && job.draftAvailable && artifact && <button className="studio-button studio-small" type="button"
                       onClick={() => onPreview(artifact)}>Open {item.title.toLowerCase()} ↗</button>}
                     {retryable && <button className="studio-button studio-small" type="button"
@@ -115,7 +168,9 @@ export default function GenerationPanel({ job, busy, onRetry, onContinue, onPrev
                   </li>
                 );
               })}
-            </ul>
+                </ul>
+              </section>)}
+            </div>
           )}
           {evidence.length > 0 && (
             <details className="studio-job-sources">
@@ -145,7 +200,7 @@ export default function GenerationPanel({ job, busy, onRetry, onContinue, onPrev
           {!!job.quality?.issues.length && (
             <ul className="studio-issues">{job.quality.issues.map((issue, index) => <li key={index}>{issue}</li>)}</ul>
           )}
-          {!!job.lessonsWaiting && job.focusReady && !running && (
+          {!!job.lessonsWaiting && job.focusReady && !active && job.status !== "stopped" && (
             <div className="studio-scan studio-notice" role="status">
               <p>This brief is broad: {job.lessonsWaiting} more {job.lessonsWaiting === 1 ? "building" : "buildings"} can still get a lesson.</p>
               <button className="studio-button studio-small" type="button" onClick={() => onContinue()} disabled={busy}>

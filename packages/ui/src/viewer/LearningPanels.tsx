@@ -1,10 +1,12 @@
 import type { DocExcerpt } from "../api";
 import { useEffect, useId, useRef } from "react";
-import type { SpaceDiagram, SpaceSource } from "../space-types";
+import type { DiagramEditStatus, SpaceDiagram, SpaceSource } from "../space-types";
+import { DiagramEditNotice } from "./DiagramEditNotice";
 import type { DiagramPlayback, FlowPlayback, SpaceFocus, SpaceHandle } from "./space-engine";
 import { DocumentReader } from "./DocumentReader";
 import { DiagramViewSwitch } from "./DiagramExplanation";
 import { diagramTitle } from "./diagram-explanation";
+import { diagramNote } from "./diagram-note";
 import { ReplayComparison } from "./ReplayComparison";
 import { evidenceInRange, readingEvidenceKey, type DocumentTarget, type ReadingEvidence } from "./document-navigation";
 import type { ReplayTrace } from "./flow-replay";
@@ -54,7 +56,8 @@ export function ReplayPanels({
   traces,
   backToDiagram,
   practice,
-  ask
+  ask,
+  collapsed = false
 }: {
   replay: FlowPlayback;
   controls: SpaceHandle["replay"] | undefined;
@@ -63,6 +66,7 @@ export function ReplayPanels({
   backToDiagram?: { view: "Explain" | "Inspect"; open: () => void };
   practice?: () => void;
   ask?: () => void;
+  collapsed?: boolean;
 }) {
   const { title, scenarioId, scenarios, summary, actor, caption, detail, source, state } = replay;
   const current = Math.min(replay.steps, Math.max(1, replay.step + 1));
@@ -73,7 +77,7 @@ export function ReplayPanels({
   const scenarioTitle = scenarios.find(({ id }) => id === scenarioId)?.title ?? selectedTrace?.title;
   return (
     <>
-      <aside className="kd-learn-card kd-replay-inspector" aria-label="Scenario details">
+      <aside id="kd-stage-details" hidden={collapsed} className="kd-learn-card kd-replay-inspector" aria-label="Scenario details">
         <div className="kd-learn-heading">
           <div className="kd-learn-eyebrow"><span /> Scenario replay</div>
           <button type="button" className="kd-learn-icon" onClick={() => controls?.close()} aria-label="Close replay">×</button>
@@ -152,7 +156,7 @@ export function ReplayPanels({
   );
 }
 
-export function DiagramPanels({ inspect, controls, selection, clearSelection, openSource, openFlow, flowTitle, diagram, selectItem, showExplain, edit }: {
+export function DiagramPanels({ inspect, controls, selection, clearSelection, openSource, openFlow, flowTitle, diagram, selectItem, showExplain, edit, collapsed = false, baseStatus }: {
   inspect: DiagramPlayback;
   controls: SpaceHandle["inspect"] | undefined;
   selection?: SpaceFocus;
@@ -164,7 +168,10 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
   selectItem: (ref: string) => void;
   showExplain?: () => void;
   edit?: () => void;
+  collapsed?: boolean;
+  baseStatus?: DiagramEditStatus;
 }) {
+  const note = diagramNote(diagram);
   const plays = inspect.kind === "sequence" || !inspect.spatial;
   const title = inspect.kind === "sequence" ? "Sequence diagram" : diagramTitle({ kind: inspect.kind ?? "graph", id: inspect.diagramId });
   const nodeNames = new Map(diagram?.nodes.map((node) => [node.id, node.label]));
@@ -175,12 +182,13 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [inspect.diagramId]);
   return (
     <>
-      <aside className="kd-learn-card kd-replay-inspector" aria-label={title}>
+      <aside id="kd-stage-details" hidden={collapsed} className="kd-learn-card kd-replay-inspector" aria-label={title}>
         <div className="kd-learn-heading">
           <div className="kd-learn-eyebrow"><span /> {title}</div>
           <button type="button" className="kd-learn-icon" onClick={() => controls?.close()} aria-label="Close diagram">×</button>
         </div>
         <h2 ref={heading} tabIndex={-1}>{inspect.title}</h2>
+        <DiagramEditNotice status={baseStatus} />
         {showExplain && <DiagramViewSwitch mode="inspect" onChange={(mode) => { if (mode === "explain") showExplain(); }} />}
         {inspect.caption ? <p aria-live="polite">{inspect.caption}</p> : <p>{
           inspect.kind === "sequence" ? "Step through messages and returns between participants." :
@@ -193,7 +201,8 @@ export function DiagramPanels({ inspect, controls, selection, clearSelection, op
           inspect.kind === "stack" ? "Read the layers from the base up. Select a layer to inspect its source." :
           "Select a component or relationship to inspect it."
         }</p>}
-        {diagram?.note && <p>{diagram.note}</p>}
+        {note.content && <p>{note.content}</p>}
+        {note.diagnostic && <details className="kd-generation-details"><summary>Generation details</summary><p>{note.diagnostic}</p></details>}
         {diagram?.origin && <small className="kd-doc-origin">{diagram.origin === "code" ? "From code" : diagram.origin === "mermaid" ? "From a diagram in the docs"
           : diagram.origin === "user" ? "Edited in this workspace" : "From documentation"}</small>}
         {selection && <div className="kd-replay-step">

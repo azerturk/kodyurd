@@ -1,8 +1,11 @@
 {
   "name": "@kodyurd/scene-schema",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Scene JSON contract for Kodyurd: agents write it, the engine renders it.",
   "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [

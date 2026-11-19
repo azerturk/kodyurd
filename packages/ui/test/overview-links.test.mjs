@@ -6,11 +6,11 @@ import { walkMove, walkPath } from "../src/viewer/walk-path.ts";
 const block = (id, x, z, w = 5, d = 5) => ({ id, pos: { x, z }, size: { w, d } });
 const asSolid = ({ pos, size }) => ({ ...pos, halfW: size.w / 2, halfD: size.d / 2 });
 
-test("a map opens clear and limits a requested neighborhood without losing exact selection", () => {
+test("a map opens with bounded connections and limits a neighborhood without losing exact selection", () => {
   const links = Array.from({ length: 11 }, (_, i) => ({ id: String(i), from: "a", to: String(i) }));
   const unrelated = { id: "other", from: "b", to: "c" };
   const map = [unrelated, ...links];
-  assert.deepEqual(visibleOverviewLinks(map), []);
+  assert.deepEqual(visibleOverviewLinks(map), map.slice(0, 6));
   assert.deepEqual(visibleOverviewLinks(map, "a"), links.slice(0, 8));
   assert.deepEqual(visibleOverviewLinks(map, "a", "10"), [links[10]]);
   assert.deepEqual(visibleOverviewLinks(map, undefined, "other"), [unrelated]);

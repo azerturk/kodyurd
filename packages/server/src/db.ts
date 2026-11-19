@@ -74,5 +74,8 @@ export function openDb(dataDir: string): SqliteDb {
   if (!settingsColumns.some(({ name }) => name === "focus_module")) {
     db.exec("ALTER TABLE project_generation ADD COLUMN focus_module TEXT");
   }
+  if (!settingsColumns.some(({ name }) => name === "review_plan")) {
+    db.exec("ALTER TABLE project_generation ADD COLUMN review_plan INTEGER NOT NULL DEFAULT 0");
+  }
   return db;
 }

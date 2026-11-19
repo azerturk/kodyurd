@@ -7,7 +7,17 @@ export interface ExamAttempt {
 
 function questionVersion(question: SpaceAssessmentQuestion): string {
   const options = [...question.options].sort((a, b) => a.id.localeCompare(b.id));
-  return JSON.stringify([question.kind, question.prompt, options, question.answer]);
+  const meaning: unknown[] = [question.kind, question.prompt, options, question.answer];
+  // A legacy tour checkpoint's index can be reused after stops are reordered.
+  // Its meaning includes where the question came from, not just its visible wording.
+  if (/^tour-checkpoint-\d+$/.test(question.id)) meaning.push([
+    question.building ?? null,
+    question.source?.path.replaceAll("\\", "/") ?? null,
+    question.source?.startLine ?? null,
+    question.source?.endLine ?? null,
+    question.replay ? [question.replay.flow, question.replay.scenario ?? null, question.replay.step ?? null, question.replay.stepIndex ?? null] : null
+  ]);
+  return JSON.stringify(meaning);
 }
 
 export function questionsFor(space: SpaceDoc): SpaceAssessmentQuestion[] {
@@ -76,7 +86,8 @@ export function readAttempt(key: string, questions: SpaceAssessmentQuestion[], l
     (Partial<ExamAttempt> & { versions?: Record<string, string> }) | undefined;
   const answers = Object.fromEntries(questions.flatMap((question) => {
     const answer = saved?.answers?.[question.id];
-    if (saved?.versions && saved.versions[question.id] !== questionVersion(question)) return [];
+    // Old unversioned responses cannot establish that an ID still means the same question.
+    if (saved?.versions?.[question.id] !== questionVersion(question)) return [];
     return validAnswer(question, answer) ? [[question.id, answer]] : [];
   }));
   return { answers, finished: saved?.finished === true && Object.keys(answers).length === questions.length };

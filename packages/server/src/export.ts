@@ -2,19 +2,17 @@ import { promises as fs } from "node:fs";
 import { createWriteStream, existsSync } from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { parseSpace, type SpaceLayout, type TSpaceDocument } from "@kodyurd/scene-schema";
 import archiver from "archiver";
-import { overlaysPath, projectDir, spacePath, type ProjectRow } from "./jobs.js";
+import type { ProjectRow } from "./jobs.js";
+import { overlaysPath, projectDir, spacePath } from "./project-files.js";
 import { overlayBuilding, type OverlayRecord } from "./overlay-records.js";
-import { readAuthoredDiagrams } from "./authored-diagrams.js";
-import { applyDiagramEdits, readDiagramEdits } from "./diagram-edits.js";
-import { buildSpaceLayout, layoutDiagram, refreshCampus, refreshCompactDiagrams, refreshInteriors } from "./space-layout/index.js";
-import { cityTitle } from "./space-pipeline.js";
+import { readSavedSpace } from "./saved-space.js";
 import { tripoCacheGlb } from "./tripo.js";
 import { AgentError } from "./agents.js";
-import { createSourceReader, markStaleClaimEvidence } from "./source-evidence.js";
 import { tryAcquireWorkspaceOperation } from "./workspace-operation.js";
 import { installedPackRoles, packAssetPath, packDirectory } from "./asset-registry.js";
+
+export { readSavedSpace, readSavedSpaceFile } from "./saved-space.js";
 
 /**
  * Static export of the knowledge city: the same walkable world, zero servers.
@@ -134,50 +132,6 @@ export function collectPackRoles(space: AnySpaceDoc, layout: AnySpaceLayout): st
   return [...roles].sort();
 }
 
-/** Read current or legacy Scene JSON and derive geometry when no current layout was stored. */
-export async function readSavedSpace(
-  dataDir: string,
-  projectId: string,
-  sourceDir?: string
-): Promise<{ space: TSpaceDocument; layout: SpaceLayout }> {
-  return applyDiagramEdits(await readSavedSpaceFile(spacePath(dataDir, projectId), sourceDir), await readDiagramEdits(dataDir, projectId));
-}
-
-/** The generated city as saved, with diagrams imported from its documents but without the user's edits. */
-export async function readSavedSpaceFile(file: string, sourceDir?: string): Promise<{ space: TSpaceDocument; layout: SpaceLayout }> {
-  const raw: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-  const saved = typeof raw === "object" && raw !== null && "space" in raw
-    ? raw as { space: unknown; layout?: SpaceLayout }
-    : { space: raw };
-  const parsed = parseSpace(saved.space);
-  if (!parsed.success) throw new Error("The saved city is invalid.");
-  const space = parsed.data;
-  for (const building of space.city.buildings) building.title = cityTitle(building.id, building.title, "b-", building.moduleRef);
-  for (const district of space.city.districts) district.title = cityTitle(district.id, district.title, "d-");
-  const layout = !parsed.upgradedFrom && saved.layout?.city
-    ? refreshInteriors(space, refreshCampus(space, refreshCompactDiagrams(space, saved.layout)))
-    : buildSpaceLayout(space);
-  if (!sourceDir) return { space, layout };
-
-  const read = createSourceReader(sourceDir);
-  await markStaleClaimEvidence(space, read);
-  const authored = await readAuthoredDiagrams(space, read);
-  if (!authored.length) return { space, layout };
-
-  // This supplement is assembled on read for the local viewer and explicit export.
-  // The accepted space and its saved coverage stay intact.
-  space.diagrams.push(...authored);
-  const diagrams = { ...layout.diagrams };
-  for (const diagram of authored) {
-    diagrams[diagram.id] = layoutDiagram(diagram);
-    if (space.navigation.searchIndex.length < 2000) {
-      space.navigation.searchIndex.push({ label: diagram.title, kind: "diagram", ref: diagram.id,
-        keywords: ["authored", "mermaid", diagram.kind], sourcePath: diagram.source?.path });
-    }
-  }
-  return { space, layout: { ...layout, diagrams } };
-}
-
 export async function buildSpaceExport(
   dataDir: string,
   project: ProjectRow,
@@ -276,7 +230,7 @@ async function writeBundle(
   const portableSpace = { ...payload.space, meta: { ...payload.space.meta, sourceDir: "." } };
   await fs.writeFile(
     path.join(outDir, "space.json"),
-    JSON.stringify({ space: portableSpace, layout: payload.layout, packRoles, overlays: overlaysOut })
+    JSON.stringify({ space: portableSpace, layout: payload.layout, packRoles, overlays: overlaysOut, diagramEdits: payload.diagramEdits })
   );
   await fs.writeFile(path.join(outDir, "README.txt"), BUNDLE_README);
 }

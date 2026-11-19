@@ -14,6 +14,8 @@ export interface FocusDeliverable {
   id: FocusDeliverableId;
   kind: FocusKind;
   title: string;
+  building?: string;
+  moduleRef?: string;
   state: "pending" | "running" | "ready" | "failed" | "timed-out";
   error?: string;
   reference?: string;
@@ -37,7 +39,7 @@ const requestedView: Record<typeof LESSON_VIEWS[number], RegExp> = {
   context: /\b(?:c4 (?:diagrams?|models?|context)|(?:system )?context diagrams?|container diagrams?|deployment (?:diagrams?|views?))\b|kontekst diaqram|diagrama de contexto|диаграмм[ауы] контекста/
 };
 
-export function newFocusDeliverables(brief = "", documentationOnly = false, companion?: { moduleRef: string; title: string },
+export function newFocusDeliverables(brief = "", documentationOnly = false, companion?: { id?: string; moduleRef: string; title: string },
   views: readonly FocusKind[] = [], elsewhere: readonly FocusKind[] = []): FocusDeliverable[] {
   const requested: FocusKind[] = documentationOnly || wantsDiagramLesson(brief) ? ["map"] : ["map", "scenario"];
   const text = brief.normalize("NFKC").toLowerCase();
@@ -50,7 +52,8 @@ export function newFocusDeliverables(brief = "", documentationOnly = false, comp
   const scope = companion && createHash("sha256").update(companion.moduleRef).digest("hex").slice(0, 12);
   return requested.map((kind) => ({
     id: scope ? `lesson-${scope}-${kind}` : focusId(kind), kind,
-    title: companion ? `${companion.title} · ${deliverableTitle[kind]}` : deliverableTitle[kind], state: "pending"
+    title: companion ? `${companion.title} · ${deliverableTitle[kind]}` : deliverableTitle[kind], state: "pending",
+    ...(companion ? { building: companion.id, moduleRef: companion.moduleRef } : {})
   }));
 }
 
@@ -385,6 +388,7 @@ export async function runFocusDeliverable(options: FocusGenerationOptions): Prom
         options.read, shown, Boolean(narrow || options.prompt.evidenceOnly), Boolean(options.prompt.documentationOnly), Boolean(options.prompt.companionLesson));
     } catch (error) {
       last = error;
+      if (error instanceof AgentError && error.code === "AGENT_CANCELLED") throw error;
       if (!(error instanceof AgentError) || !["AGENT_TIMEOUT", "AGENT_NO_JSON", "AGENT_IMAGE_UNSUPPORTED", "AGENT_OUTPUT_LIMIT", "DELIVERABLE_INVALID", "DELIVERABLE_INCOMPLETE"].includes(error.code)) throw error;
       if (!narrow) {
         outputLimited = error.code === "AGENT_OUTPUT_LIMIT";

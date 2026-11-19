@@ -18,6 +18,25 @@ export interface ViewRect {
   bottom: number;
 }
 
+export interface NameplateRaster {
+  fontSize: number;
+  textureWidth: number;
+  textureHeight: number;
+  lines: number;
+}
+
+/** The fitted glyph size decides readability: a long single line can be clearer than two tiny lines. */
+export function readableNameplate(corners: readonly { x: number; y: number }[], raster: NameplateRaster, viewport: ViewRect): boolean {
+  if (corners.length !== 4 || corners.some(({ x, y }) => !Number.isFinite(x) || !Number.isFinite(y) ||
+    x < viewport.left || x > viewport.right || y < viewport.top || y > viewport.bottom)) return false;
+  if (![raster.fontSize, raster.textureWidth, raster.textureHeight, raster.lines].every((value) => Number.isFinite(value) && value > 0) ||
+    raster.fontSize * 1.2 * raster.lines > raster.textureHeight) return false;
+  const length = (a: number, b: number): number => Math.hypot(corners[a].x - corners[b].x, corners[a].y - corners[b].y);
+  const width = Math.min(length(0, 1), length(3, 2));
+  const height = Math.min(length(0, 3), length(1, 2));
+  return raster.fontSize * height / raster.textureHeight >= 12 && raster.fontSize * width / raster.textureWidth >= 10;
+}
+
 /** Keep a label near its anchor while leaving model silhouettes and accepted labels uncovered. */
 export function placeWorldLabel(
   x: number, y: number, halfWidth: number, height: number, viewport: ViewRect,

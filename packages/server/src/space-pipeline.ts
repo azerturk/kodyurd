@@ -39,6 +39,7 @@ import type { AnalyzerReport } from "./analyzer.js";
 import type { ProjectRow } from "./jobs.js";
 import { authoredDecisionQuotes, isDocumentationOnly, requestedDecisionEvidence, type EvidenceExcerpt } from "./source-evidence.js";
 import { sceneVisualContract } from "./scene-reference.js";
+import { assembledQuestionId, selectCityLearning, type LearningLimit, type ScopedLearning } from "./learning-selection.js";
 
 /**
  * P1 city plan and P2 building passes are assembled and
@@ -448,7 +449,7 @@ export function normalizeDiagram(v: unknown): Record<string, unknown> | undefine
         if (!name || !type || names.has(name)) return [];
         names.add(name);
         const keys = [...new Set(arr(field.keys).slice(0, 3).flatMap((key) => oneOf(key, DIAGRAM_FIELD_KEYS) ?? []))];
-        return [{ name, type, keys: keys.length ? keys : undefined, note: str(field.note, 160), source: normSource(field.source) }];
+        return [{ name, type, ...(keys.length ? { keys } : {}), note: str(field.note, 160), source: normSource(field.source) }];
       }) : [];
       return {
         id: nid,
@@ -475,7 +476,7 @@ export function normalizeDiagram(v: unknown): Record<string, unknown> | undefine
       const right = oneOf(cardinality.to, DIAGRAM_CARDINALITIES);
       if (kind === "erd" && (!left || !right)) return undefined;
       return { id: normId(edge.id), from, to, label: str(edge.label, 48), guard: str(edge.guard, 80), kind: oneOf(edge.kind, DIAGRAM_EDGE_KINDS),
-        cardinality: kind === "erd" && left && right ? { from: left, to: right } : undefined, source: normSource(edge.source) };
+        cardinality: (kind === "erd" || kind === "class") && left && right ? { from: left, to: right } : undefined, source: normSource(edge.source) };
     })
     .filter((e): e is NonNullable<typeof e> => e !== undefined)
     .slice(0, 80);
@@ -827,6 +828,7 @@ export interface AssembleInput {
   plan: TCityPlan;
   passes: TBuildingPass[];
   focusBuilding?: string;
+  onLearningLimit?: (omitted: LearningLimit) => void;
 }
 
 /** Merge P1 + P2 results into one raw document (validated afterwards). */
@@ -837,14 +839,18 @@ export function assembleSpace(input: AssembleInput): Record<string, unknown> {
   for (const d of input.plan.diagrams) diagrams.set(d.id, d);
   const interiors: unknown[] = [];
   const coverage: unknown[] = [];
-  const tour: unknown[] = [];
-  const questions: TBuildingPass["questions"] = [];
+  const tour: { stop: TSpaceDocument["tour"][number]; building?: string }[] = [];
+  const questions: ScopedLearning<TBuildingPass["questions"][number]>[] = [];
+  const moduleByBuilding = new Map(input.plan.city.buildings.map(({ id, moduleRef }) => [id, moduleRef]));
   const searchIndex: unknown[] = [...input.plan.navigation.searchIndex];
   const cameraShots: unknown[] = [];
   let accentOverrides: Record<string, string> = {};
   let panelVariants: Record<string, string> = {};
 
   for (const pass of input.passes) {
+    const passBuilding = pass.interior?.building
+      ?? pass.flows.find(({ scope }) => scope.startsWith("module:"))?.scope.slice(7)
+      ?? pass.diagrams.find(({ owner }) => owner !== "city")?.owner.split(":")[0];
     for (const f of pass.flows) if (!flows.has(f.id)) flows.set(f.id, f);
     for (const d of pass.diagrams) if (!diagrams.has(d.id)) diagrams.set(d.id, d);
     if (pass.interior) {
@@ -856,8 +862,18 @@ export function assembleSpace(input: AssembleInput): Record<string, unknown> {
       } });
     }
     coverage.push(...pass.coverage);
-    tour.push(...pass.tour);
-    questions.push(...(pass.questions ?? []));
+    tour.push(...pass.tour.map((stop) => ({ stop, building: passBuilding })));
+    for (const question of pass.questions ?? []) {
+      const replayBuilding = pass.flows.find(({ id }) => id === question.replay?.flow)?.scope;
+      const building = question.building ?? (replayBuilding?.startsWith("module:") ? replayBuilding.slice(7) : passBuilding);
+      const scope = building ? moduleByBuilding.get(building) ?? building : "city";
+      const deliverable = question.replay ? `scenario:${question.replay.flow}` : "assessment";
+      questions.push({ scope, item: {
+        ...question,
+        building: question.building ?? (building && moduleByBuilding.has(building) ? building : undefined),
+        id: assembledQuestionId(scope, deliverable, question.id)
+      } });
+    }
     searchIndex.push(...pass.searchIndex);
     if (pass.presentation) {
       cameraShots.push(...pass.presentation.cameraShots);
@@ -883,6 +899,19 @@ export function assembleSpace(input: AssembleInput): Record<string, unknown> {
   const flow = flowList.find((item) => item.id === start?.flow);
   if (map) intro.push({ ref: map.id, narration: map.note || map.title, source: map.source?.startLine ? map.source : map.nodes[0]?.source });
   if (flow) intro.push({ ref: flow.id, narration: flow.scenarios?.[0]?.summary || flow.title, source: flow.source?.startLine ? flow.source : flow.path[0]?.source });
+  const scopeForRef = (ref: string, fallback?: string): string => {
+    const scopedFlow = flowList.find(({ id }) => id === ref)?.scope;
+    const owner = diagramList.find(({ id }) => id === ref)?.owner;
+    const building = moduleByBuilding.has(ref) ? ref
+      : scopedFlow?.startsWith("module:") ? scopedFlow.slice(7)
+        : owner && owner !== "city" ? owner.split(":")[0] : fallback;
+    return building ? moduleByBuilding.get(building) ?? building : "city";
+  };
+  const learning = selectCityLearning(questions,
+    tour.filter(({ stop }) => !intro.some((item) => item.ref === stop.ref))
+      .map(({ stop, building }) => ({ scope: scopeForRef(stop.ref, building), item: stop })),
+    intro.map((stop) => ({ scope: scopeForRef(stop.ref, focus), item: stop })));
+  if (learning.omitted.questions || learning.omitted.tourStops) input.onLearningLimit?.(learning.omitted);
   return {
     version: "0.2",
     meta: {
@@ -909,8 +938,8 @@ export function assembleSpace(input: AssembleInput): Record<string, unknown> {
       menu: input.plan.navigation.menu,
       searchIndex: searchIndex.slice(0, 2000)
     },
-    tour: [...intro, ...tour.filter((stop) => !intro.some((item) => item.ref === rec(stop).ref))].slice(0, 40),
-    assessment: questions.length ? { questions: [...new Map(questions.map((question) => [question.id, question])).values()].slice(0, 64) } : undefined
+    tour: learning.tour,
+    assessment: learning.questions.length ? { questions: learning.questions } : undefined
   };
 }
 

@@ -14,6 +14,7 @@ import "./index.css";
 interface ExportPayload {
   space: SpacePayload["space"];
   layout: SpacePayload["layout"];
+  diagramEdits?: SpacePayload["diagramEdits"];
   packRoles?: string[];
   overlays?: SpaceOverlay[];
 }
@@ -59,7 +60,7 @@ fetch("./space.json")
       <React.StrictMode>
         <SpaceViewer
           offline={{
-            payload: { space: data.space, layout: data.layout },
+            payload: { space: data.space, layout: data.layout, diagramEdits: data.diagramEdits },
             packRoles: data.packRoles ?? [],
             assetBase: "./models/",
             overlays: data.overlays ?? []

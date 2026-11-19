@@ -279,4 +279,8 @@ export interface SpaceOverlay {
 export interface SpacePayload {
   space: SpaceDoc;
   layout: SpaceLayout;
+  /** Workspace corrections whose original generated base changed, disappeared or was not tracked. */
+  diagramEdits?: DiagramEditStatus[];
 }
+
+export interface DiagramEditStatus { id: string; state: "changed" | "missing" | "unknown"; hasGenerated?: boolean }

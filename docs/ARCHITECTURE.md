@@ -3,9 +3,9 @@
 Kodyurd is a local app that turns read-only source evidence into one validated knowledge city.
 
 1. **Scan.** The server inventories the selected folder and indexes relevant source, docs and diagrams with explicit bounds.
-2. **Plan.** A provider creates a city plan and scoped learning deliverables from source evidence. Claude Code, Codex CLI and the Anthropic API share the Scene JSON contract.
-3. **Validate.** The server normalizes bounded fields, validates with the scene schema, verifies sources and lays out the city. Invalid results remain visible as pending or failed deliverables.
-4. **Render.** PlayCanvas renders one world from the same validated document and deterministic layout. Semantic roles resolve to installed models, with built-in geometry for missing or invalid files.
+2. **Plan.** A provider creates a city plan and scoped learning deliverables from source evidence. An optional review pauses before lessons are built. Accepted results and a saved checkpoint support stop and resume. Claude Code, Codex CLI and the Anthropic API share the Scene JSON contract.
+3. **Validate.** The server normalizes bounded fields, validates with the scene schema, verifies sources and lays out the city. Inventory metrics come from the scan. Learning items retain their building identities within the city's bounded question and tour selections. Invalid results remain visible as pending or failed deliverables.
+4. **Render.** PlayCanvas renders one world from the same validated document and deterministic layout. The viewer, Guide and export share the published city's authored diagrams and user corrections; retained claim evidence is checked after these layers are composed. Editing preserves evidence only for unchanged meanings. Semantic roles resolve to installed models, with built-in geometry for missing or invalid files.
 5. **Share.** Export uses the same viewer in offline mode with a portable city document, UI assets and the models used by the city.
 
 | Package | Responsibility |

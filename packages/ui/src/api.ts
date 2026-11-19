@@ -33,6 +33,7 @@ export interface GenerationSettings {
   focusModule?: string | null;
   refreshScan?: boolean;
   reuseCache?: boolean;
+  reviewPlan?: boolean;
 }
 
 export interface ProjectDetailResponse {
@@ -101,6 +102,16 @@ export interface GenerationDeliverable {
   state: "pending" | "running" | "ready" | "failed" | "timed-out";
   error?: string;
   reference?: string;
+  building?: string;
+  buildingTitle?: string;
+  moduleRef?: string;
+}
+
+export type LessonView = "sequence" | "state" | "matrix" | "erd" | "class" | "mindmap" | "context";
+
+export interface PlanReview {
+  focusBuilding?: string;
+  buildings: { id: string; moduleRef: string; title: string; required: boolean; documentationOnly: boolean; selected: boolean; views: LessonView[] }[];
 }
 
 /** A city this workspace generated earlier; each brief keeps its latest one. */
@@ -130,6 +141,8 @@ export interface JobView {
   draftAvailable?: boolean;
   /** Buildings the brief asks about that wait beyond the lesson limit. */
   lessonsWaiting?: number;
+  resumeAvailable?: boolean;
+  planReview?: PlanReview;
   quality?: {
     focusBuilding?: string;
     status: "ready" | "partial" | "pending";
@@ -209,7 +222,7 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  health: () => fetch("/api/health").then((r) => json<{ ok: boolean; version: string }>(r)),
+  health: (signal?: AbortSignal) => fetch("/api/health", { signal }).then((r) => json<{ ok: boolean; version: string }>(r)),
   doctor: () => fetch("/api/doctor").then((r) => json<{ checks: DoctorCheck[] }>(r)),
   agents: () => fetch("/api/agents").then((r) => json<{ agents: AgentInfo[] }>(r)),
   editor: () => fetch("/api/editor").then((r) => json<{ available: boolean; name: string; detail: string }>(r)),
@@ -247,7 +260,7 @@ export const api = {
   job: (id: string) => fetch(`/api/jobs/${id}`).then((r) => json<{ job: JobView }>(r)),
   startSpace: (
     id: string,
-    body: { brief: string; language: string; agent: string; model?: string; focusModule?: string | null; fresh?: boolean; refreshScan?: boolean }
+    body: { brief: string; language: string; agent: string; model?: string; focusModule?: string | null; fresh?: boolean; refreshScan?: boolean; reviewPlan?: boolean }
   ) =>
     fetch(`/api/projects/${id}/space`, {
       method: "POST",
@@ -272,6 +285,14 @@ export const api = {
     fetch(`/api/projects/${id}/cities/${jobId}`, { method: "DELETE" }).then((r) => json<{ ok: boolean }>(r)),
   continueLessons: (id: string, jobId: string) =>
     fetch(`/api/projects/${id}/jobs/${jobId}/lessons/continue`, { method: "POST" }).then((r) => json<{ jobId: string }>(r)),
+  stopGeneration: (id: string, jobId: string) =>
+    fetch(`/api/projects/${id}/jobs/${jobId}/stop`, { method: "POST" }).then((r) => json<{ ok: boolean }>(r)),
+  resumeGeneration: (id: string, jobId: string) =>
+    fetch(`/api/projects/${id}/jobs/${jobId}/resume`, { method: "POST" }).then((r) => json<{ jobId: string }>(r)),
+  approvePlan: (id: string, jobId: string, lessons: { building: string; views: LessonView[] }[]) =>
+    fetch(`/api/projects/${id}/jobs/${jobId}/plan/approve`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lessons })
+    }).then((r) => json<{ jobId: string }>(r)),
   retryDeliverable: (id: string, jobId: string, deliverableId: string) =>
     fetch(`/api/projects/${id}/jobs/${jobId}/deliverables/${encodeURIComponent(deliverableId)}/retry`, {
       method: "POST"

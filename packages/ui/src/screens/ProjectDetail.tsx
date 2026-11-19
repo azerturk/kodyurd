@@ -3,7 +3,8 @@ import {
   api, LocalApiError, type AgentId, type AgentInfo, type AnalyzerReport, type JobView, type OverlayItem, type Project,
   type ScanExclusion, type SpaceOffer
 } from "../api";
-import GenerationPanel, { focusTitle, isRunning } from "./GenerationPanel";
+import GenerationPanel, { focusTitle, isJobActive, isRunning } from "./GenerationPanel";
+import { LESSON_VIEW_LABELS } from "./PlanReview";
 import SavedCities from "./SavedCities";
 import StudioDialog from "./StudioDialog";
 
@@ -86,6 +87,7 @@ export default function ProjectDetail({
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [refreshScan, setRefreshScan] = useState(true);
   const [reuseCache, setReuseCache] = useState(true);
+  const [reviewPlan, setReviewPlan] = useState(false);
   const [agents, setAgents] = useState<AgentInfo[] | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const [screen, setScreen] = useState<"brief" | "job">("brief");
@@ -117,9 +119,9 @@ export default function ProjectDetail({
       if (!current) return;
       setProject(data.project);
       setHasSpace(data.hasSpace);
-      const initialJob = isRunning(data.latestJob) ? data.latestJob : data.latestGenerationJob ?? data.latestJob;
+      const initialJob = isJobActive(data.latestJob) ? data.latestJob : data.latestGenerationJob ?? data.latestJob;
       setJob(initialJob);
-      if (initialJob && (!data.hasSpace || isRunning(initialJob) || initialJob.quality?.status === "partial")) setScreen("job");
+      if (initialJob && (!data.hasSpace || isJobActive(initialJob) || initialJob.quality?.status === "partial" || initialJob.resumeAvailable)) setScreen("job");
       if (data.generation) {
         setBrief(readDraft(id) ?? data.generation.brief);
         setLanguage(data.generation.language);
@@ -128,6 +130,7 @@ export default function ProjectDetail({
         setFocusModule(data.generation.focusModule ?? "");
         setRefreshScan(data.generation.refreshScan ?? true);
         setReuseCache(data.generation.reuseCache ?? true);
+        setReviewPlan(data.generation.reviewPlan ?? false);
       }
     }).catch(fail);
     api.analysis(id).then((data) => { if (current) setReport(data.report); }).catch((err: Error) => {
@@ -183,7 +186,7 @@ export default function ProjectDetail({
 
   const selectedAgent = agent ?? agents?.find((item) => item.available && item.implemented)?.id ?? "claude";
   const available = agents?.some((item) => item.id === selectedAgent && item.available && item.implemented) ?? false;
-  const generating = busy || isRunning(job);
+  const generating = busy || isJobActive(job);
   const operationBusy = generating || rescanning || exporting || maintaining || savingOverlay;
   const sameSlot = (left: { building: string; class: string }, right: { building: string; class: string }) =>
     left.building === right.building && left.class === right.class;
@@ -210,6 +213,12 @@ export default function ProjectDetail({
     try { localStorage.setItem(draftKey(id), value); } catch { /* keep the draft in this view */ }
   }
 
+  function addBriefText(value: string): void {
+    const next = [brief.trimEnd(), value].filter(Boolean).join("\n");
+    if (next.length > 2000) return setNotice("The brief is full. Shorten it before adding another suggestion.");
+    updateBrief(next);
+  }
+
   function toggleLessonModule(name: string): void {
     const selected = lessonModules.includes(name);
     if (!selected && lessonModules.length >= pinnedLessonLimit) return;
@@ -234,7 +243,7 @@ export default function ProjectDetail({
     }).catch((err: Error) => {
       setError(err.message);
       void api.project(id).then(({ latestJob }) => {
-        if (isRunning(latestJob)) {
+        if (isJobActive(latestJob)) {
           setJob(latestJob);
           setScreen("job");
         }
@@ -273,8 +282,17 @@ export default function ProjectDetail({
     setDialog(null);
     setEvidenceChanges(null);
     start("space", api.startSpace(id, {
-      brief, language, agent: selectedAgent, model: model.trim() || undefined, focusModule: focusModule || null, fresh: !reuseCache, refreshScan
+      brief, language, agent: selectedAgent, model: model.trim() || undefined, focusModule: focusModule || null, fresh: !reuseCache, refreshScan, reviewPlan
     }), true);
+  }
+
+  function stopGeneration(): void {
+    if (!job || busy) return;
+    setBusy(true);
+    setError(null);
+    api.stopGeneration(id, job.id).then(() => setJob((current) => current?.id === job.id && ["queued", "running", "awaiting-review"].includes(current.status)
+      ? { ...current, status: "stopping" } : current))
+      .catch((err: Error) => setError(err.message)).finally(() => setBusy(false));
   }
 
   function checkEvidence(): void {
@@ -323,7 +341,7 @@ export default function ProjectDetail({
               {exporting ? "Exporting…" : "Export bundle"}
             </button>
             <button className="studio-button studio-primary" type="button" onClick={() => onWalkSpace()}>
-              {job?.focusReady ? "Open focus city" : isRunning(job) || job?.status === "failed" || job?.status === "interrupted" || job?.quality?.keptPrevious
+              {job?.focusReady ? "Open focus city" : isJobActive(job) || job?.status === "failed" || job?.status === "interrupted" || job?.status === "stopped" || job?.quality?.keptPrevious
                 ? "Open saved city" : "Enter city"}
             </button>
           </div>
@@ -343,10 +361,13 @@ export default function ProjectDetail({
       {error && <p role="alert" className="studio-alert">{error}</p>}
       {notice && <p role="status" className="studio-scan studio-notice">{notice}</p>}
       {pollError && activeJobId && <p role="status" className="studio-alert">Reconnecting to the local job…</p>}
-      {screen === "job" && job ? <GenerationPanel job={job} busy={operationBusy}
+      {screen === "job" && job ? <GenerationPanel job={job} busy={busy}
         onPreview={(artifact) => onPreview(job.id, artifact)}
         onRetry={(deliverableId) => start("space", api.retryDeliverable(id, job.id, deliverableId))}
-        onContinue={() => start("space", api.continueLessons(id, job.id))} /> : (
+        onContinue={() => start("space", api.continueLessons(id, job.id))}
+        onStop={stopGeneration}
+        onResume={() => start("space", api.resumeGeneration(id, job.id))}
+        onApprove={(lessons) => start("space", api.approvePlan(id, job.id, lessons))} /> : (
         <>
           <div className="studio-panel studio-grid studio-overview studio-scan-overview">
             <div>
@@ -416,6 +437,23 @@ export default function ProjectDetail({
                   aria-describedby="studio-brief-lesson-help"
                   placeholder="Who is learning, and what should the city explain in depth?" />
               </label>
+              <div className="studio-brief-tools" aria-label="Add a requested view to the brief">
+                {LESSON_VIEW_LABELS.map(({ value, label }) => <button className="studio-button studio-small" type="button" key={value}
+                  disabled={operationBusy || brief.toLowerCase().includes(label.toLowerCase())}
+                  onClick={() => addBriefText(`Include a ${value === "context" ? "system context diagram" : label.toLowerCase()}.`)}>{label}</button>)}
+                <span className="studio-brief-count">{brief.length}/2,000</span>
+              </div>
+              <details className="studio-brief-examples">
+                <summary>Brief examples</summary>
+                <div className="studio-brief-tools">
+                  <button className="studio-button studio-small" type="button" disabled={operationBusy} onClick={() => addBriefText(
+                    `Explain ${focusModule || report?.modules[0]?.name || "the main module"}: its inputs, responsibilities and outcomes. Cite the source and tests.`)}>Understand a module</button>
+                  <button className="studio-button studio-small" type="button" disabled={operationBusy} onClick={() => addBriefText(
+                    "Show the system architecture, module responsibilities and data relationships. Include a system context diagram and a data model.")}>Explore architecture</button>
+                  <button className="studio-button studio-small" type="button" disabled={operationBusy} onClick={() => addBriefText(
+                    "Trace a successful request and one rejected or failed case. Explain the branch conditions, state changes and source evidence.")}>Trace behavior</button>
+                </div>
+              </details>
               <p className="studio-muted studio-lesson-help" id="studio-brief-lesson-help">The brief decides which buildings get a lesson. Pin a module from the discovered map to make sure it is one of them.</p>
               <label className="studio-field">Focus module
                 <select value={focusModule} onChange={(event) => setFocusModule(event.target.value)}>
@@ -464,6 +502,8 @@ export default function ProjectDetail({
                 <label className="studio-checkbox"><input type="checkbox" checked={reuseCache}
                   onChange={(event) => setReuseCache(event.target.checked)} /> Reuse cached lessons</label>
               </details>
+              <label className="studio-checkbox"><input type="checkbox" checked={reviewPlan} disabled={operationBusy}
+                onChange={(event) => setReviewPlan(event.target.checked)} /> Review the plan before building lessons</label>
               <div className="studio-actions studio-brief-submit">
                 <button className="studio-button studio-primary" type="submit"
                   disabled={!project || !report || operationBusy || !available || !validFocus}>
@@ -558,6 +598,7 @@ export default function ProjectDetail({
             <dt>Model</dt><dd>{model.trim() || "Agent default"}</dd>
             <dt>Source scan</dt><dd>{refreshScan ? "Refresh source scan" : "Reuse current scan"}</dd>
             <dt>Lesson cache</dt><dd>{reuseCache ? "Reuse validated lessons" : "Generate fresh lessons"}</dd>
+            <dt>Lesson plan</dt><dd>{reviewPlan ? "Pause for your review before building lessons" : "Build lessons after planning"}</dd>
           </dl>
           {brief.trim() && <p className="studio-review-brief">{brief.trim()}</p>}
           <div className="studio-actions">

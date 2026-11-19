@@ -1,13 +1,13 @@
 {
   "name": "kodyurd-monorepo",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "npm run build -w @kodyurd/scene-schema && npm run build -w @kodyurd/server && npm run build -w @kodyurd/ui && npm run build -w kodyurd",
